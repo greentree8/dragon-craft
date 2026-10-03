@@ -96,3 +96,28 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 1px; b
 #death p { font-size: 18px; text-shadow: 0 2px 4px #000; }
 
 @media (max-width: 720px) { #menu { padding: 8px; } #palette-grid { grid-template-columns: repeat(4, 64px); } .slot { width: 40px; height: 40px; } }
+
+/* multiplayer radar */
+#radar { position: absolute; left: 16px; bottom: 16px; width: 168px; font: 600 13px system-ui, sans-serif; text-shadow: 0 1px 3px #000; }
+#radar canvas { display: block; }
+.radar-list { margin-top: 6px; display: grid; gap: 3px; }
+.radar-list div { background: rgba(8,14,28,.62); padding: 3px 9px; border-radius: 12px; white-space: nowrap; }
+.radar-list i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; border: 1.5px solid #fff; vertical-align: -1px; }
+.radar-empty { font-weight: 500; opacity: .85; white-space: normal !important; }
+
+/* boss health bar */
+#bossbar { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); width: min(420px, 60vw); text-align: center; }
+#bossbar.hidden { display: none; }
+#bossname { font: 800 17px system-ui, sans-serif; letter-spacing: .06em; text-shadow: 0 2px 4px #000; margin-bottom: 4px; color: #ffd8b0; }
+.bosstrack { height: 14px; background: rgba(10,6,8,.75); border: 2px solid #5a1a1a; border-radius: 8px; overflow: hidden; }
+.bosstrack i { display: block; height: 100%; width: 100%; background: linear-gradient(#ff5a3c, #b01818); transition: width .15s; }
+
+/* ice-breath hint on the first hotbar slot */
+.slot .icebadge { position: absolute; right: 3px; bottom: 1px; font-size: 14px; color: #bfe8ff; text-shadow: 0 0 6px #4aa8ff, 0 1px 2px #000; }
+
+/* special attacks with cooldowns */
+#abilities { position: absolute; right: 16px; bottom: 16px; display: flex; gap: 8px; }
+#abilities .ab { position: relative; width: 52px; height: 52px; border-radius: 12px; background: rgba(8,14,28,.7); border: 2px solid rgba(255,255,255,.35); display: grid; place-items: center; font-size: 24px; overflow: hidden; text-shadow: 0 1px 3px #000; }
+#abilities .ab kbd { position: absolute; left: 4px; top: 2px; font: 700 11px system-ui, sans-serif; background: none; border: none; padding: 0; opacity: .9; }
+#abilities .ab .cd { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.62); height: 0; }
+#abilities .ab.ready { border-color: #ffe27a; box-shadow: 0 0 10px rgba(255,226,122,.45); }

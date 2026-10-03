@@ -11,14 +11,16 @@ import { FireBreath, ICE_BREATH } from './fire.js';
 import { Bursts } from './effects.js';
 import { Mobs } from './mobs.js';
 import { Enemies } from './enemies.js';
+import { Abilities, ABILITIES } from './abilities.js';
 import { Vitals } from './stats.js';
 import { Save } from './save.js';
 import { UI } from './ui.js';
 import { Net, serverUrl } from './net.js';
+import { Radar } from './radar.js';
 import { B, DEFS } from './blocks.js';
 import { SLOT, DEFAULT_HOTBAR, FOODS, PALETTE, BLOCK_NAMES, canBreak } from './items.js';
 import { VOLCANO, VILLAGE, CRYSTAL_ISLE, HEIGHT } from './worldgen.js';
-import { CASTLE } from './castle.js';
+import { CASTLE, CASTLES } from './castle.js';
 
 const VERSION = '0.2.0';
 const params = new URLSearchParams(location.search);
@@ -69,6 +71,7 @@ if (net) {
   net.onStatus = (ok) => ui.toast(ok ? 'Reconnected' : 'Connection lost. Trying to reconnect…');
 }
 const enemies = new Enemies(scene, world, bursts);
+const abilities = new Abilities({ scene, world, bursts, mobs, enemies, canBreak, B });
 const vitals = new Vitals();
 vitals.load(saved);
 const player = new Player(world, canvas);
@@ -117,15 +120,20 @@ const ui = new UI({
     navigator.userAgent,
   ].join('\n'),
 });
+const radar = new Radar(document.getElementById('hud'));
 ui.buildHotbar(hot);
+ui.buildAbilities(ABILITIES);
 ui.setVitals(vitals.health, vitals.hunger);
 ui.showMenu(savedLook ? 'play' : 'dragon');
 
-let suppressMenu = false;
+let suppressMenu = false, iceHinted = false;
 document.addEventListener('pointerlockchange', () => {
   const on = document.pointerLockElement === canvas;
   player.locked = on;
-  if (on) { ui.hideMenu(); ui.markStarted(); }
+  if (on) {
+    ui.hideMenu(); ui.markStarted();
+    if (!iceHinted) { iceHinted = true; setTimeout(() => ui.toast('❄ Hold right-click or G for ICE breath (slot 1)'), 1800); }
+  }
   else { player.buttons.clear(); if (!ui.paletteOpen && !suppressMenu) ui.showMenu('play'); }
 });
 document.addEventListener('pointerlockerror', () => { suppressMenu = false; if (!ui.paletteOpen) ui.showMenu('play'); });
@@ -168,6 +176,23 @@ function openPalette() {
 }
 
 let debugOn = params.has('debug');
+// where the mouth is and which way the crosshair says to aim (sets `mouth` and `aim`)
+function aimFromCrosshair() {
+  dragon.root.updateMatrixWorld(true);
+  dragon.mouthWorld(mouth);
+  const dir = player.lookDir(aim);
+  const hit = world.raycast(camera.position, dir, 80);
+  if (hit) tmpV.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
+  else tmpV.copy(camera.position).addScaledVector(dir, 60);
+  aim.copy(tmpV).sub(mouth).normalize();
+}
+
+function useAbility(id) {
+  if (vitals.dead || !player.ready) return;
+  aimFromCrosshair();
+  if (abilities.use(id, mouth, aim, player)) vitals.spend(ABILITIES.find((a) => a.id === id).cost);
+}
+
 addEventListener('keydown', (e) => {
   if (e.code === 'F3') { e.preventDefault(); debugOn = !debugOn; return; }
   if (e.code === 'Escape' && ui.paletteOpen) { ui.closePalette(); return; }
@@ -176,6 +201,9 @@ addEventListener('keydown', (e) => {
   if (/^Digit[1-9]$/.test(e.code)) selectSlot(Number(e.code.slice(5)) - 1);
   else if (e.code === 'KeyE') openPalette();
   else if (e.code === 'KeyR') quickEat();
+  else if (e.code === 'KeyZ') useAbility('lightning');
+  else if (e.code === 'KeyX') useAbility('fireball');
+  else if (e.code === 'KeyB') useAbility('roar');
   else if (e.code === 'KeyT' && !net) sky.time = (sky.time + 0.08) % 1;
   else if (e.code === 'KeyP' && !net) sky.paused = !sky.paused;
   else if (e.code === 'Minus') player.camDist = Math.min(16, player.camDist + 1);
@@ -287,10 +315,14 @@ function handleVitalEvents(events) {
   }
 }
 
+const NO_VEL = new THREE.Vector3();
 const enemyHooks = {
   hit: (dmg, source) => { if (!vitals.dead) { const ev = vitals.damage(dmg, source); if (ev) handleVitalEvents([ev]); } },
   drop: (type, x, y, z) => mobs.spawnDrop(type, x, y, z),
   toast: (t) => ui.toast(t),
+  fireBreath: (origin, dir, dt) => fire.emit(origin, dir, NO_VEL, dt),
+  iceBreath: (origin, dir, dt) => ice.emit(origin, dir, NO_VEL, dt),
+  chill: (t) => { if (player.slowT <= 0) ui.toast('Frozen! You are slowed…'); player.slowT = t; },
 };
 
 function persist() {
@@ -356,13 +388,7 @@ function frame() {
 
   // fire breath aims where the crosshair points
   if (player.breathing && player.ready) {
-    dragon.root.updateMatrixWorld(true);
-    dragon.mouthWorld(mouth);
-    const dir = player.lookDir(aim);
-    const hit = world.raycast(camera.position, dir, 80);
-    if (hit) tmpV.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
-    else tmpV.copy(camera.position).addScaledVector(dir, 60);
-    aim.copy(tmpV).sub(mouth).normalize();
+    aimFromCrosshair();
     vel.copy(player.vel).multiplyScalar(0.6);
     if (player.breathingIce) {
       ice.emit(mouth, aim, vel, dt);
@@ -377,10 +403,13 @@ function frame() {
   }
   if (net) net.sendState(dt, player, { yaw: relYaw, pitch: lookPitch }, aim);
   const others = net ? net.update(dt, { fire, ice }, mouth) : { fire: false, ice: false };
-  fire.update(dt, (player.breathing && !player.breathingIce) || others.fire);
-  ice.update(dt, player.breathingIce || others.ice);
+  fire.update(dt, (player.breathing && !player.breathingIce) || others.fire || enemies.drakes.some((d) => d.state === 'breath' && !d.frost));
+  ice.update(dt, player.breathingIce || others.ice || enemies.drakes.some((d) => d.state === 'breath' && d.frost));
   bursts.update(dt);
+  abilities.update(dt);
+  ui.setCooldowns(abilities.fractions());
   if (player.ready) enemies.update(dt, { pos: player.pos, vel: player.vel, dead: vitals.dead }, enemyHooks);
+  ui.setBoss(enemies.bossInfo());
   if (player.ready) mobs.update(dt, player, (type) => {
     hot.food[type]++;
     ui.toast(`Picked up ${FOODS[type].name}`);
@@ -401,6 +430,10 @@ function frame() {
       `chunks ${s.chunks}  tris ${(s.tris / 1000).toFixed(0)}k  mobs ${mobs.list.length}  time ${sky.clockString()}  ${player.flying ? 'flying' : 'walking'}`;
   } else debug.textContent = '';
   clockEl.textContent = sky.clockString();
+  radar.update(dt, { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw },
+    net ? [...net.remotes.values()].filter((r) => r.hasPos).map((r) => ({ name: r.name, x: r.pos.x, y: r.pos.y, z: r.pos.z, color: r.dragon.look.body })) : [],
+    net ? (net.connected ? `Room "${WORLD}": no other dragons yet. Send your friend this link!` : 'Reconnecting…')
+      : 'Single player. Could not reach the multiplayer server.', CASTLES.map((c) => ({ name: 'Castle', x: c.x, z: c.z })));
   if (net && (onlineT -= dt) <= 0) {
     onlineT = 1;
     onlineEl.textContent = net.connected ? `👥 ${[dragon.look.name, ...net.names()].join(', ')}` : '⚠ reconnecting…';
@@ -409,4 +442,4 @@ function frame() {
 frame();
 
 // handy for tests and future features
-window.__game = { ice, enemies, net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE, CASTLE } };
+window.__game = { abilities, composer, ice, enemies, net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE, CASTLE, CASTLES } };

@@ -64,6 +64,9 @@ export class Vitals {
     return { type: 'hurt', source };
   }
 
+  // abilities cost a little food
+  spend(n) { this.hunger = Math.max(0, this.hunger - n); this.changed = true; }
+
   // returns true if something was eaten
   eat(food) {
     if (this.dead || this.eatCooldown > 0) return false;

@@ -207,7 +207,7 @@ export class UI {
     this.slotEls.forEach((el, i) => {
       el.classList.toggle('sel', i === selected);
       el.querySelectorAll(':scope > :not(.num)').forEach((n) => n.remove());
-      if (i === SLOT.FIRE) el.insertAdjacentHTML('beforeend', iconSvg(FLAME));
+      if (i === SLOT.FIRE) el.insertAdjacentHTML('beforeend', iconSvg(FLAME) + '<span class="icebadge" title="Right-click or G: ice breath">❄</span>');
       else if (i === SLOT.APPLE || i === SLOT.MEAT) {
         const key = i === SLOT.APPLE ? 'apple' : 'meat';
         el.insertAdjacentHTML('beforeend', iconSvg(key === 'apple' ? APPLE : DRUMSTICK('#c8702e')) + `<span class="cnt">${food[key]}</span>`);
@@ -222,6 +222,40 @@ export class UI {
     el.classList.add('show');
     clearTimeout(this._nameT);
     this._nameT = setTimeout(() => el.classList.remove('show'), 1400);
+  }
+
+  buildAbilities(list) {
+    const box = $('abilities');
+    box.innerHTML = '';
+    this.abEls = list.map((a) => {
+      const el = document.createElement('div');
+      el.className = 'ab ready';
+      el.title = a.name;
+      el.innerHTML = `<kbd>${a.key}</kbd>${a.icon}<div class="cd"></div>`;
+      box.appendChild(el);
+      return { el, cd: el.querySelector('.cd'), last: -1 };
+    });
+  }
+
+  // fractions: how much cooldown is left for each ability (0 = ready)
+  setCooldowns(fractions) {
+    fractions.forEach((f, i) => {
+      const a = this.abEls[i];
+      const q = Math.round(f * 50);
+      if (a.last === q) return;
+      a.last = q;
+      a.cd.style.height = `${f * 100}%`;
+      a.el.classList.toggle('ready', f <= 0);
+    });
+  }
+
+  // boss health bar; pass null to hide it
+  setBoss(info) {
+    const el = $('bossbar');
+    if (!info) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    $('bossname').textContent = info.name;
+    $('bossfill').style.width = `${Math.max(0, Math.min(100, (info.hp / info.max) * 100))}%`;
   }
 
   toast(text) {

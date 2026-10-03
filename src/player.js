@@ -20,6 +20,7 @@ export class Player {
     this.inWater = false;
     this.boosting = false;
     this.breathing = false;
+    this.slowT = 0; // seconds of frost slow left
     this.keys = new Set();
     this.buttons = new Set(); // held mouse buttons
     this.inLava = false;
@@ -99,6 +100,7 @@ export class Player {
     const strafeIn = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
     const up = k.has('Space'), down = k.has('KeyC') || k.has('ControlLeft') || k.has('KeyQ');
     this.boosting = (k.has('ShiftLeft') || k.has('ShiftRight')) && (fwdIn > 0 || this.flying);
+    this.slowT = Math.max(0, this.slowT - dt);
     if (this.frozen) { this.vel.set(0, 0, 0); return; }
 
     const head = w.getBlock(Math.floor(this.pos.x), Math.floor(this.pos.y + 0.3), Math.floor(this.pos.z));
@@ -113,7 +115,7 @@ export class Player {
     let tx = 0, ty = 0, tz = 0;
     let accel;
     if (this.flying) {
-      const speed = this.boosting ? 34 : 15;
+      const speed = (this.boosting ? 34 : 15) * (this.slowT > 0 ? 0.5 : 1);
       const look = this.lookDir(this.fwd);
       tx = look.x * fwdIn + this.right.x * strafeIn;
       ty = look.y * fwdIn;
@@ -126,7 +128,7 @@ export class Player {
       if (this.inWater || this.inLava) { tx *= 0.55; ty *= 0.55; tz *= 0.55; }
       accel = 1 - Math.exp(-(this.boosting ? 2.6 : 4.2) * dt);
     } else {
-      const speed = this.boosting ? 10 : 5.2;
+      const speed = (this.boosting ? 10 : 5.2) * (this.slowT > 0 ? 0.5 : 1);
       tx = flatFwd.x * fwdIn + this.right.x * strafeIn;
       tz = flatFwd.z * fwdIn + this.right.z * strafeIn;
       const len = Math.hypot(tx, tz);

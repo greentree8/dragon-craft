@@ -1,7 +1,7 @@
 // Procedural terrain: a pure function of (seed, x, y, z) so chunks always agree at their borders.
 import { Noise, hash2, smoothstep, clamp, mix } from './noise.js';
 import { B } from './blocks.js';
-import { CASTLE, castleBlock } from './castle.js';
+import { CASTLES, castleBlock } from './castle.js';
 
 export const CHUNK = 16;
 export const HEIGHT = 128;
@@ -187,27 +187,34 @@ export class WorldGen {
   }
 
   nearCastle(x, z, pad = 0) {
-    return Math.abs(x - CASTLE.x) <= CASTLE.reach + pad && Math.abs(z - CASTLE.z) <= CASTLE.reach + pad;
+    return CASTLES.some((c) => Math.abs(x - c.x) <= c.reach + pad && Math.abs(z - c.z) <= c.reach + pad);
   }
 
-  // y of the castle's courtyard floor layer: the average ground height under it
-  castleBase() {
-    if (this._castleBase === undefined) {
+  // y of a castle's courtyard floor layer: the average ground height under it
+  castleBase(c = CASTLES[0]) {
+    this._castleBase ??= new Map();
+    let v = this._castleBase.get(c.id);
+    if (v === undefined) {
       let sum = 0, n = 0;
-      for (const dx of [-16, 0, 16]) for (const dz of [-16, 0, 16]) { sum += this.height(CASTLE.x + dx, CASTLE.z + dz); n++; }
-      this._castleBase = Math.round(sum / n);
+      for (const dx of [-16, 0, 16]) for (const dz of [-16, 0, 16]) { sum += this.height(c.x + dx, c.z + dz); n++; }
+      v = Math.round(sum / n);
+      this._castleBase.set(c.id, v);
     }
-    return this._castleBase;
+    return v;
   }
 
   stampCastle(data, cx, cz) {
+    for (const c of CASTLES) this.stampOneCastle(data, cx, cz, c);
+  }
+
+  stampOneCastle(data, cx, cz, C) {
     const ox = cx * CHUNK, oz = cz * CHUNK;
-    if (ox > CASTLE.x + CASTLE.reach || ox + CHUNK <= CASTLE.x - CASTLE.reach) return;
-    if (oz > CASTLE.z + CASTLE.reach || oz + CHUNK <= CASTLE.z - CASTLE.reach) return;
-    const base = this.castleBase();
+    if (ox > C.x + C.reach || ox + CHUNK <= C.x - C.reach) return;
+    if (oz > C.z + C.reach || oz + CHUNK <= C.z - C.reach) return;
+    const base = this.castleBase(C);
     for (let lz = 0; lz < CHUNK; lz++) for (let lx = 0; lx < CHUNK; lx++) {
-      const dx = ox + lx - CASTLE.x, dz = oz + lz - CASTLE.z;
-      if (Math.max(Math.abs(dx), Math.abs(dz)) > CASTLE.reach) continue;
+      const dx = ox + lx - C.x, dz = oz + lz - C.z;
+      if (Math.max(Math.abs(dx), Math.abs(dz)) > C.reach) continue;
       // foundation down to solid ground, so it never hovers over a dip
       for (let y = base - 1; y > 2; y--) {
         const i = (y * CHUNK + lz) * CHUNK + lx;

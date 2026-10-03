@@ -4,14 +4,15 @@ import * as THREE from 'three';
 import { B } from './blocks.js';
 import { moveBox } from './physics.js';
 import { softGeometry } from './soft.js';
-import { CASTLE, GARRISON } from './castle.js';
+import { CASTLES, GARRISON } from './castle.js';
+import { Drake, DRAKE_MAX_HP } from './drake.js';
 
 const SPEC = {
   knight: { hp: 14, speed: 2.7, hx: 0.35, hy: 0.95, dmg: 3, sight: 30, scale: 1 },
   archer: { hp: 8, speed: 0, hx: 0.3, hy: 0.9, dmg: 2, sight: 42, scale: 1 },
   boss: { hp: 60, speed: 2.2, hx: 0.6, hy: 1.55, dmg: 5, sight: 40, scale: 1.7 },
 };
-const ARROW_SPEED = 28, ARROW_GRAVITY = 9, MAX_ARROWS = 14, SPAWN_RANGE = 115, DESPAWN_RANGE = 190;
+const ARROW_SPEED = 28, ARROW_GRAVITY = 9, MAX_ARROWS = 24, SPAWN_RANGE = 115, DESPAWN_RANGE = 190;
 
 // A person built from rounded parts, feet at y = 0, facing -Z.
 function humanoid(type) {
@@ -81,28 +82,31 @@ export class Enemies {
   constructor(scene, world, bursts) {
     this.scene = scene; this.world = world; this.bursts = bursts;
     this.list = []; this.arrows = [];
-    this.spawned = false; this.clearedAt = null; this.warned = false; this.kills = 0;
+    this.sites = CASTLES.map((c) => ({ c, spawned: false, clearedAt: null, warned: false, drake: null }));
+    this.kills = 0;
     this._v = new THREE.Vector3(); this._d = new THREE.Vector3(); this._q = new THREE.Quaternion();
     this.arrowGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6);
     this.arrowMat = new THREE.MeshStandardMaterial({ color: 0xcaa56a, roughness: 0.8 });
     this.boltGeo = new THREE.SphereGeometry(0.26, 12, 8);
     this.boltMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 0.6, 3.0) });
+    this.ballGeo = new THREE.SphereGeometry(0.55, 14, 10);
+    this.ballMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.3, 0.25) });
   }
 
-  get center() { return this._c ??= new THREE.Vector3(CASTLE.x + 0.5, 0, CASTLE.z + 0.5); }
-
-  spawnGarrison() {
-    const base = this.world.gen.castleBase();
-    for (const [type, dx, dz, dy] of GARRISON) this.spawn(type, CASTLE.x + 0.5 + dx, base + dy, CASTLE.z + 0.5 + dz);
-    this.spawned = true;
+  spawnGarrison(site) {
+    const { c } = site;
+    const base = this.world.gen.castleBase(c);
+    for (const [type, dx, dz, dy] of GARRISON) this.spawn(type, c.x + 0.5 + dx, base + dy, c.z + 0.5 + dz, site);
+    site.drake = new Drake(this.scene, this.world, { x: c.x + 0.5, z: c.z + 0.5, base }, this);
+    site.spawned = true;
   }
 
-  spawn(type, x, feetY, z) {
+  spawn(type, x, feetY, z, site) {
     const spec = SPEC[type];
     const { group, legs, arms, head, mats } = humanoid(type);
     this.scene.add(group);
     const m = {
-      type, spec, group, legs, arms, head, mats, hx: spec.hx, hy: spec.hy, hz: spec.hx,
+      site, type, spec, group, legs, arms, head, mats, hx: spec.hx, hy: spec.hy, hz: spec.hx,
       pos: new THREE.Vector3(x, feetY + spec.hy + 0.05, z), vel: new THREE.Vector3(),
       home: new THREE.Vector3(x, feetY + spec.hy + 0.05, z),
       yaw: Math.random() * 6.28, hp: spec.hp, cd: 1 + Math.random() * 2, swing: 0, burn: 0, freeze: 0, phase: 0, aggro: false, boltT: 3,
@@ -118,10 +122,25 @@ export class Enemies {
     const i = this.list.indexOf(m); if (i >= 0) this.list.splice(i, 1);
   }
 
-  clearAll() { for (const m of [...this.list]) this.remove(m); for (const a of this.arrows) this.scene.remove(a.mesh); this.arrows.length = 0; }
+  clearSite(site) {
+    for (const m of [...this.list]) if (m.site === site) this.remove(m);
+    if (site.drake && !site.drake.dead) site.drake.dispose();
+    site.drake = null;
+    if (!this.sites.some((s) => s.spawned && s !== site)) { for (const a of this.arrows) this.scene.remove(a.mesh); this.arrows.length = 0; }
+  }
+
+  get drakes() { return this.sites.filter((s) => s.drake && !s.drake.dead).map((s) => s.drake); }
+
+  // the boss bar: the Drake that is fighting you right now
+  bossInfo() {
+    let best = null;
+    for (const d of this.drakes) if (d.engaged && (!best || d.hp < best.hp)) best = d;
+    return best ? { name: 'Dread Drake', hp: best.hp, max: DRAKE_MAX_HP } : null;
+  }
 
   // fire breath: anyone inside the cone takes damage
   burnCone(origin, dir, dt, range = 16, dps = 8) {
+    for (const d of this.drakes) d.burnCone(origin, dir, dt);
     for (const m of this.list) {
       const v = this._v.copy(m.pos).sub(origin);
       const d = v.length();
@@ -136,6 +155,7 @@ export class Enemies {
 
   // ice breath: guards stop moving and can't attack while frozen
   freezeCone(origin, dir, dt, range = 16) {
+    for (const d of this.drakes) d.freezeCone(origin, dir, dt);
     for (const m of this.list) {
       const v = this._v.copy(m.pos).sub(origin);
       const d = v.length();
@@ -167,14 +187,16 @@ export class Enemies {
     const t = d / speed;
     const aim = this._v.copy(target).addScaledVector(tVel, t * 0.7);
     aim.x += (Math.random() - 0.5) * spread; aim.y += (Math.random() - 0.5) * spread * 0.6; aim.z += (Math.random() - 0.5) * spread;
-    const grav = kind === 'bolt' ? 0 : ARROW_GRAVITY;
+    const grav = kind === 'arrow' ? ARROW_GRAVITY : 0;
     aim.y += 0.5 * grav * t * t;
     const vel = aim.sub(from).normalize().multiplyScalar(speed);
-    const mesh = new THREE.Mesh(kind === 'bolt' ? this.boltGeo : this.arrowGeo, kind === 'bolt' ? this.boltMat : this.arrowMat);
-    mesh.castShadow = kind !== 'bolt';
+    const geo = kind === 'arrow' ? this.arrowGeo : kind === 'fireball' ? this.ballGeo : this.boltGeo;
+    const mat = kind === 'arrow' ? this.arrowMat : kind === 'fireball' ? this.ballMat : this.boltMat;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.castShadow = kind === 'arrow';
     mesh.position.copy(from);
     this.scene.add(mesh);
-    this.arrows.push({ mesh, pos: from.clone(), vel, kind, life: 5, dmg: kind === 'bolt' ? 4 : 2, grav });
+    this.arrows.push({ mesh, pos: from.clone(), vel, kind, life: 6, dmg: kind === 'fireball' ? 4 : kind === 'bolt' ? 4 : 2, grav });
   }
 
   lineOfSight(from, to) {
@@ -261,19 +283,25 @@ export class Enemies {
   // hooks: { hit(dmg, source), drop(type, x, y, z), toast(text) }
   update(dt, player, hooks) {
     const now = performance.now() / 1000;
-    const dc = Math.hypot(player.pos.x - this.center.x, player.pos.z - this.center.z);
-    if (!this.warned && dc < 100) { this.warned = true; hooks.toast('A castle! Its guards have spotted you…'); }
-    if (!this.spawned && dc < SPAWN_RANGE && this.world.isLoaded(CASTLE.x, CASTLE.z) && (this.clearedAt === null || (now - this.clearedAt > 240 && dc > 90))) {
-      this.clearedAt = null;
-      this.spawnGarrison();
+    for (const site of this.sites) {
+      const { c } = site;
+      const dc = Math.hypot(player.pos.x - c.x, player.pos.z - c.z);
+      if (!site.warned && dc < 100) { site.warned = true; hooks.toast(c.id === 0 ? 'A castle! Its guards (and a dragon) have spotted you…' : 'Another castle! Beware its Dread Drake…'); }
+      if (!site.spawned && dc < SPAWN_RANGE && this.world.isLoaded(c.x, c.z) && (site.clearedAt === null || (now - site.clearedAt > 240 && dc > 90))) {
+        site.clearedAt = null;
+        this.spawnGarrison(site);
+      }
+      if (site.spawned && dc > DESPAWN_RANGE) { this.clearSite(site); site.spawned = false; }
+      if (site.drake) site.drake.update(dt, player, hooks);
+      if (site.spawned && !this.list.some((m) => m.site === site) && !(site.drake && !site.drake.dead) && site.clearedAt === null) {
+        site.clearedAt = now; site.spawned = false; site.drake = null;
+      }
     }
-    if (this.spawned && dc > DESPAWN_RANGE) { this.clearAll(); this.spawned = false; }
 
     for (const m of [...this.list]) {
       this.step(m, dt, player, hooks);
       if (m.hp <= 0) this.kill(m, hooks);
     }
-    if (this.spawned && !this.list.length && this.clearedAt === null) { this.clearedAt = now; this.spawned = false; }
 
     // arrows and bolts
     for (const a of [...this.arrows]) {
@@ -288,7 +316,7 @@ export class Enemies {
       let done = a.life <= 0 || !!hit;
       if (!player.dead && a.pos.distanceTo(player.pos) < 1.3) { hooks.hit(a.dmg, a.kind); done = true; }
       if (done) {
-        if (hit || a.kind === 'bolt') this.bursts.burst(a.pos.x, a.pos.y, a.pos.z, a.kind === 'bolt' ? 0xc050ff : 0xcaa56a, 5, 2, 0.1, 1);
+        if (hit || a.kind !== 'arrow') this.bursts.burst(a.pos.x, a.pos.y, a.pos.z, a.kind === 'bolt' ? 0xc050ff : a.kind === 'fireball' ? 0xff8a30 : 0xcaa56a, a.kind === 'fireball' ? 14 : 5, a.kind === 'fireball' ? 5 : 2, a.kind === 'fireball' ? 0.25 : 0.1, 1);
         this.scene.remove(a.mesh);
         this.arrows.splice(this.arrows.indexOf(a), 1);
       }

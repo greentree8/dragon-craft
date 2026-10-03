@@ -90,7 +90,9 @@ export function buildSmooth(pad, maxY, ox, oz) {
       gx += cv[i] * (i & 1 ? 1 : -1); gy += cv[i] * (i & 2 ? 1 : -1); gz += cv[i] * (i & 4 ? 1 : -1);
     }
     let nx = -gx, ny = -gy, nz = -gz;
-    const len = Math.hypot(nx, ny, nz) || 1;
+    // a perfectly balanced gradient gives a zero vector; a zero normal turns the lighting into NaN (a black screen), so fall back to up
+    let len = Math.hypot(nx, ny, nz);
+    if (len < 1e-4) { nx = 0; ny = 1; nz = 0; len = 1; }
     nx /= len; ny /= len; nz /= len;
 
     // colour from the nearby smooth blocks; facing up shows the block's top colour, cliffs its side

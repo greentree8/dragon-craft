@@ -346,7 +346,7 @@ export class Dragon {
 
   tailTip(parent, kind) {
     const M = this.mats;
-    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+    const add = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
     if (kind === 'club') {
       add(softGeometry(0.5, 0.5, 0.55, 0.9), M.accent, 0, 0, 0.78);
       for (const s of [-1, 1]) {

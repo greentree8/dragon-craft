@@ -2,14 +2,21 @@
 // Local coords: (dx, dz) from the castle centre, dy = 0 is the courtyard floor layer.
 import { B } from './blocks.js';
 
-export const CASTLE = { x: 136, z: 72, reach: 19 };
+// Castles are scattered around the world; each has the same layout, a garrison and a Dread Drake.
+export const CASTLES = [
+  { id: 0, x: 136, z: 72, reach: 19 },
+  { id: 1, x: -24, z: 324, reach: 19 },
+  { id: 2, x: 324, z: -108, reach: 19 },
+];
+export const CASTLE = CASTLES[0];
+const REACH = 19;
 
 const { AIR, STONE_BRICK: SB, COBBLE, PLANKS, LANTERN, GOLD, LOG } = B;
 
 // returns undefined outside the castle's footprint (terrain is left alone)
 export function castleBlock(dx, dy, dz) {
   const ax = Math.abs(dx), az = Math.abs(dz), m = Math.max(ax, az);
-  if (m > CASTLE.reach || dy > 26) return undefined;
+  if (m > REACH || dy > 26) return undefined;
 
   // corner towers (7x7, solid base, open battlement on top)
   if (ax >= 13 && az >= 13) {
