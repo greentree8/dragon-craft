@@ -4,5 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 TARGET="${1:-/var/www/dragon}"
 mkdir -p "$TARGET"
-rsync -a --delete index.html style.css src vendor "$TARGET"/
+# plain cp so it works without rsync; clear the old copies first so removed files don't linger
+rm -rf "$TARGET"/src "$TARGET"/vendor
+cp -r index.html style.css src vendor "$TARGET"/
 echo "Deployed to $TARGET"
