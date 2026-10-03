@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dragon Craft</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three.module.js",
+  "three/addons/": "./vendor/addons/"
+} }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="underwater"></div>
+
+<div id="overlay">
+  <div class="card">
+    <h1>Dragon Craft</h1>
+    <p class="sub">Fly. Explore. Breathe fire.</p>
+    <div class="bar"><div id="loadbar"></div></div>
+    <p id="loadtext">Shaping the world…</p>
+    <button id="start" disabled>Loading…</button>
+    <div class="controls">
+      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly / walk</div>
+      <div><kbd>Mouse</kbd> look &amp; steer</div>
+      <div><kbd>Space</kbd> take off / rise</div>
+      <div><kbd>C</kbd> or <kbd>Ctrl</kbd> descend</div>
+      <div><kbd>Shift</kbd> boost</div>
+      <div><kbd>Click</kbd> breathe fire</div>
+      <div><kbd>V</kbd> first person &nbsp; <kbd>Wheel</kbd> zoom</div>
+      <div><kbd>T</kbd> skip time &nbsp; <kbd>P</kbd> pause time</div>
+      <div><kbd>F3</kbd> debug &nbsp; <kbd>Esc</kbd> pause</div>
+    </div>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="crosshair"></div>
+  <div id="clock"></div>
+  <div id="help" class="hidden">H hides this</div>
+  <pre id="debug"></pre>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
