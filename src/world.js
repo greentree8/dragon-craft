@@ -52,8 +52,9 @@ class MeshBuilder {
 }
 
 export class World {
-  constructor(scene, { seed = 1337, renderDistance = 7 } = {}) {
+  constructor(scene, { seed = 1337, renderDistance = 7, save = null } = {}) {
     this.scene = scene;
+    this.save = save;
     this.gen = new WorldGen(seed);
     this.chunks = new Map();
     this.renderDistance = renderDistance;
@@ -87,19 +88,28 @@ export class World {
     return !!(c && c.data);
   }
 
+  // Changes a block, persists the edit and re-meshes the affected chunks right away.
   setBlock(x, y, z, id) {
-    if (y < 0 || y >= HEIGHT) return;
+    if (y < 0 || y >= HEIGHT) return false;
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
     const c = this.chunks.get(key(cx, cz));
-    if (!c || !c.data) return;
+    if (!c || !c.data) return false;
     const lx = x - cx * CHUNK, lz = z - cz * CHUNK;
-    c.data[(y * CHUNK + lz) * CHUNK + lx] = id;
-    c.modified = true;
-    this.markDirty(c);
-    if (lx === 0) this.markDirtyAt(cx - 1, cz);
-    if (lx === CHUNK - 1) this.markDirtyAt(cx + 1, cz);
-    if (lz === 0) this.markDirtyAt(cx, cz - 1);
-    if (lz === CHUNK - 1) this.markDirtyAt(cx, cz + 1);
+    const idx = (y * CHUNK + lz) * CHUNK + lx;
+    if (c.data[idx] === id) return false;
+    c.data[idx] = id;
+    if (this.save) this.save.recordEdit(cx, cz, idx, id);
+    const touched = [c];
+    if (lx === 0) touched.push(this.chunks.get(key(cx - 1, cz)));
+    if (lx === CHUNK - 1) touched.push(this.chunks.get(key(cx + 1, cz)));
+    if (lz === 0) touched.push(this.chunks.get(key(cx, cz - 1)));
+    if (lz === CHUNK - 1) touched.push(this.chunks.get(key(cx, cz + 1)));
+    for (const t of touched) {
+      if (!t || !t.data) continue;
+      if (t.meshed && this.neighboursReady(t.cx, t.cz)) this.meshChunk(t);
+      else t.dirty = true;
+    }
+    return true;
   }
 
   markDirtyAt(cx, cz) { const c = this.chunks.get(key(cx, cz)); if (c) this.markDirty(c); }
@@ -166,8 +176,10 @@ export class World {
   }
 
   generateChunk(cx, cz) {
-    const c = { cx, cz, data: this.gen.generate(cx, cz), meshed: false, dirty: true, meshes: [], mesh: null, water: null, modified: false };
-    this.chunks.set(key(cx, cz), c);
+    const data = this.gen.generate(cx, cz);
+    const edits = this.save && this.save.getEdits(cx, cz);
+    if (edits) for (const [i, id] of edits) data[i] = id;
+    this.chunks.set(key(cx, cz), { cx, cz, data, meshed: false, dirty: true, meshes: [], mesh: null, water: null });
   }
 
   unloadFar() {
@@ -176,8 +188,7 @@ export class World {
     for (const [k, c] of this.chunks) {
       if (Math.abs(c.cx - cx) > lim || Math.abs(c.cz - cz) > lim) {
         this.disposeMeshes(c);
-        if (!c.modified) this.chunks.delete(k);
-        else c.meshed = false;
+        this.chunks.delete(k); // edits live in the save, not the chunk
       }
     }
   }

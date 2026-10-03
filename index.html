@@ -15,32 +15,82 @@
 <body>
 <canvas id="game"></canvas>
 <div id="underwater"></div>
+<div id="hurt"></div>
 
-<div id="overlay">
+<div id="menu">
   <div class="card">
     <h1>Dragon Craft</h1>
-    <p class="sub">Fly. Explore. Breathe fire.</p>
-    <div class="bar"><div id="loadbar"></div></div>
-    <p id="loadtext">Shaping the world…</p>
-    <button id="start" disabled>Loading…</button>
-    <div class="controls">
-      <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly / walk</div>
-      <div><kbd>Mouse</kbd> look &amp; steer</div>
-      <div><kbd>Space</kbd> take off / rise</div>
-      <div><kbd>C</kbd> or <kbd>Ctrl</kbd> descend</div>
-      <div><kbd>Shift</kbd> boost</div>
-      <div><kbd>Click</kbd> breathe fire</div>
-      <div><kbd>V</kbd> first person &nbsp; <kbd>Wheel</kbd> zoom</div>
-      <div><kbd>T</kbd> skip time &nbsp; <kbd>P</kbd> pause time</div>
-      <div><kbd>F3</kbd> debug &nbsp; <kbd>Esc</kbd> pause</div>
-    </div>
+    <nav class="tabs">
+      <button data-tab="play" class="on">Play</button>
+      <button data-tab="dragon">My Dragon</button>
+      <button data-tab="feedback">Feedback</button>
+      <button data-tab="help">Controls</button>
+    </nav>
+
+    <section id="tab-play">
+      <p class="sub">Fly. Explore. Build. Breathe fire.</p>
+      <div class="bar"><div id="loadbar"></div></div>
+      <p id="loadtext">Shaping the world…</p>
+      <button id="start" class="big" disabled>Loading…</button>
+      <p class="small">Your world and dragon are saved in this browser automatically.</p>
+    </section>
+
+    <section id="tab-dragon" hidden>
+      <label class="row"><span>Name</span><input id="dragon-name" maxlength="14" autocomplete="off" spellcheck="false"></label>
+      <div class="row"><span>Colors</span><div id="presets" class="presets"></div><button id="randomize" class="chip" title="Surprise me">🎲 Random</button></div>
+      <div id="colors" class="colors"></div>
+      <div id="shapes"></div>
+      <label class="check"><input type="checkbox" id="look-glow"> Glowing horns, spikes and feet</label>
+      <p><button id="to-play" class="big">Done</button></p>
+    </section>
+
+    <section id="tab-feedback" hidden>
+      <p class="small">Found a bug or have an idea? Write it here. The button below opens a ready-made note on GitHub (you may need to sign in there).</p>
+      <div class="seg" id="fb-type">
+        <button data-v="Idea" class="on">💡 Idea</button><button data-v="Bug">🐛 Bug</button><button data-v="Love">❤️ Love it</button>
+      </div>
+      <textarea id="fb-text" rows="5" placeholder="What happened? What would be cool?"></textarea>
+      <div class="actions">
+        <button id="fb-send" class="big">Send on GitHub</button>
+        <button id="fb-copy" class="chip">Copy text</button>
+      </div>
+      <p id="fb-status" class="small"></p>
+    </section>
+
+    <section id="tab-help" hidden>
+      <div class="controls">
+        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly / walk &nbsp; <kbd>Mouse</kbd> steer</div>
+        <div><kbd>Space</kbd> take off / rise &nbsp; <kbd>C</kbd> descend &nbsp; <kbd>Shift</kbd> boost</div>
+        <div><kbd>1</kbd> fire breath (hold <kbd>Click</kbd> or <kbd>F</kbd>)</div>
+        <div><kbd>2</kbd>–<kbd>7</kbd> blocks: <kbd>Left-click</kbd> break, <kbd>Right-click</kbd> place</div>
+        <div><kbd>E</kbd> choose blocks &nbsp; <kbd>Middle-click</kbd> copy a block</div>
+        <div><kbd>8</kbd> apple, <kbd>9</kbd> meat: <kbd>Right-click</kbd> or <kbd>R</kbd> to eat</div>
+        <div><kbd>Wheel</kbd> change slot &nbsp; <kbd>-</kbd> <kbd>=</kbd> camera distance &nbsp; <kbd>V</kbd> first person</div>
+        <div><kbd>T</kbd> skip time &nbsp; <kbd>P</kbd> pause time &nbsp; <kbd>F3</kbd> debug &nbsp; <kbd>Esc</kbd> menu</div>
+        <div class="small">Tip: breathe fire on animals to cook them, then pick up the meat. Break leaves for apples.</div>
+      </div>
+    </section>
   </div>
 </div>
+
+<div id="palette" class="hidden">
+  <div class="panel">
+    <h2>Choose blocks</h2>
+    <p id="palette-hint" class="small"></p>
+    <div id="palette-grid"></div>
+    <button id="palette-close" class="big">Done (E)</button>
+  </div>
+</div>
+
+<div id="death" class="hidden"><div><h2 id="death-title">Oh no!</h2><p id="death-text"></p></div></div>
 
 <div id="hud" class="hidden">
   <div id="crosshair"></div>
   <div id="clock"></div>
-  <div id="help" class="hidden">H hides this</div>
+  <div id="toasts"></div>
+  <div id="itemname"></div>
+  <div id="bars"><div id="hearts" class="icons"></div><div id="hunger" class="icons"></div></div>
+  <div id="hotbar"></div>
   <pre id="debug"></pre>
 </div>
 <script type="module" src="./src/main.js"></script>

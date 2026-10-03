@@ -21,6 +21,8 @@ export class Player {
     this.boosting = false;
     this.breathing = false;
     this.keys = new Set();
+    this.buttons = new Set(); // held mouse buttons
+    this.inLava = false;
     this.firstPerson = false;
     this.camDist = 7.5;
     this.locked = false;
@@ -37,18 +39,15 @@ export class Player {
       if (e.code === 'KeyV') this.firstPerson = !this.firstPerson;
     });
     addEventListener('keyup', (e) => this.keys.delete(e.code));
-    addEventListener('blur', () => this.keys.clear());
+    addEventListener('blur', () => { this.keys.clear(); this.buttons.clear(); });
     addEventListener('mousemove', (e) => {
       if (!this.locked) return;
       this.yaw -= e.movementX * 0.0022;
       this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch - e.movementY * 0.0022));
     });
-    addEventListener('mousedown', (e) => { if (this.locked && e.button === 0) this.breathing = true; });
-    addEventListener('mouseup', (e) => { if (e.button === 0) this.breathing = false; });
-    addEventListener('wheel', (e) => {
-      if (!this.locked) return;
-      this.camDist = Math.max(3, Math.min(16, this.camDist + Math.sign(e.deltaY) * 0.8));
-    }, { passive: true });
+    addEventListener('mousedown', (e) => { if (this.locked) this.buttons.add(e.button); });
+    addEventListener('mouseup', (e) => this.buttons.delete(e.button));
+    addEventListener('contextmenu', (e) => { if (this.locked) e.preventDefault(); });
   }
 
   // camera forward from yaw/pitch
@@ -100,9 +99,11 @@ export class Player {
     const strafeIn = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
     const up = k.has('Space'), down = k.has('KeyC') || k.has('ControlLeft') || k.has('KeyQ');
     this.boosting = (k.has('ShiftLeft') || k.has('ShiftRight')) && (fwdIn > 0 || this.flying);
+    if (this.frozen) { this.vel.set(0, 0, 0); return; }
 
     const head = w.getBlock(Math.floor(this.pos.x), Math.floor(this.pos.y + 0.3), Math.floor(this.pos.z));
     this.inWater = head === B.WATER;
+    this.inLava = head === B.LAVA || w.getBlock(Math.floor(this.pos.x), Math.floor(this.pos.y - 0.4), Math.floor(this.pos.z)) === B.LAVA;
 
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     // yaw-only camera-relative axes
@@ -122,7 +123,7 @@ export class Player {
       tx *= speed; ty *= speed; tz *= speed;
       if (up) ty += 12;
       if (down) ty -= 12;
-      if (this.inWater) { tx *= 0.55; ty *= 0.55; tz *= 0.55; }
+      if (this.inWater || this.inLava) { tx *= 0.55; ty *= 0.55; tz *= 0.55; }
       accel = 1 - Math.exp(-(this.boosting ? 2.6 : 4.2) * dt);
     } else {
       const speed = this.boosting ? 10 : 5.2;
@@ -159,6 +160,8 @@ export class Player {
     if (this.onGround && this.flying && !up) this.flying = false;
     if (this.pos.y > 190) { this.pos.y = 190; if (this.vel.y > 0) this.vel.y = 0; }
     if (this.pos.y < -20) { this.pos.set(0, 70, 0); this.vel.set(0, 0, 0); } // safety net
+    // dragons don't fall: spread the wings when dropping fast
+    if (!this.flying && this.vel.y < -14) { this.flying = true; this.vel.y *= 0.3; }
 
     // body orientation follows travel/look
     const horiz = Math.hypot(this.vel.x, this.vel.z);

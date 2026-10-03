@@ -1,9 +1,37 @@
-// The dragon: a blocky procedural model with animated wings, tail, neck and legs.
+// The dragon: a blocky procedural model with animated wings, tail, neck and legs, shaped by a "look".
 // Faces -Z. `root` sits at the physics hitbox centre.
 import * as THREE from 'three';
 
 export const DEFAULT_LOOK = {
+  name: 'Ember',
   body: 0x2fa84f, belly: 0xe8d48a, accent: 0xff7a1a, wing: 0xd9402b, eye: 0xffe14d,
+  horns: 'short', tail: 'spade', wings: 'bat', spikes: 'spikes', pattern: 'none', snout: 'short', glow: false,
+};
+
+export const LOOK_OPTIONS = {
+  horns: ['short', 'long', 'curved', 'none'],
+  tail: ['spade', 'club', 'flame', 'plain'],
+  wings: ['bat', 'spiky', 'round'],
+  spikes: ['spikes', 'ridge', 'none'],
+  pattern: ['none', 'stripes', 'spots'],
+  snout: ['short', 'long'],
+};
+
+export const PRESETS = [
+  { label: 'Emerald', body: 0x2fa84f, belly: 0xe8d48a, accent: 0xff7a1a, wing: 0xd9402b, eye: 0xffe14d },
+  { label: 'Inferno', body: 0xc8321e, belly: 0xffc060, accent: 0xffd23f, wing: 0x6b1a12, eye: 0xffe9a0 },
+  { label: 'Frost', body: 0x6fb8e8, belly: 0xf2fbff, accent: 0xb9f0ff, wing: 0x3a6fb0, eye: 0xffffff },
+  { label: 'Shadow', body: 0x2b2b3a, belly: 0x55556b, accent: 0xb44dff, wing: 0x3b1f5e, eye: 0xb44dff },
+  { label: 'Gold', body: 0xe0a82e, belly: 0xfff0b0, accent: 0xff5a2a, wing: 0xffd86b, eye: 0x7a2a00 },
+  { label: 'Cotton Candy', body: 0xff8fc4, belly: 0xfff0f8, accent: 0x7fe0ff, wing: 0xb69cff, eye: 0x3a2a5a },
+];
+
+const FINGER_LEN = [1.5, 1.3, 1.05];
+const FINGER_ANGLE = [0.4, 0.9, 1.4];
+const WING_STYLE = {
+  bat: { scallop: [0.3, 0.35], len: 1 },
+  spiky: { scallop: [0.5, 0.85], len: 1.15 },
+  round: { scallop: [-0.25, -0.15], len: 0.95 },
 };
 
 function box(w, h, d, mat) {
@@ -19,12 +47,45 @@ function spike(size, mat) {
   return m;
 }
 
-const FINGER_LEN = [1.5, 1.3, 1.05];
-const FINGER_ANGLE = [0.4, 0.9, 1.4];
+function patternTexture(kind) {
+  if (kind === 'none') return null;
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const g = c.getContext('2d');
+  g.fillStyle = '#fff';
+  g.fillRect(0, 0, 32, 32);
+  g.fillStyle = kind === 'stripes' ? '#8a8a8a' : '#9a9a9a';
+  if (kind === 'stripes') {
+    for (let y = 4; y < 32; y += 12) g.fillRect(0, y, 32, 5);
+  } else {
+    for (const [x, y, r] of [[8, 8, 4], [22, 12, 3], [12, 22, 4], [26, 26, 3], [3, 28, 2]]) {
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.magFilter = THREE.NearestFilter;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function nameSprite(text) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 64;
+  const g = c.getContext('2d');
+  g.font = '700 34px system-ui, sans-serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.75)'; g.strokeText(text, 128, 34);
+  g.fillStyle = '#fff'; g.fillText(text, 128, 34);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, fog: false }));
+  s.scale.set(3, 0.75, 1);
+  return s;
+}
 
 export class Dragon {
   constructor(look = DEFAULT_LOOK) {
-    this.look = { ...look };
+    this.look = { ...DEFAULT_LOOK, ...look };
     this.root = new THREE.Group();
     this.pivot = new THREE.Group();
     this.pivot.rotation.order = 'YXZ';
@@ -33,40 +94,71 @@ export class Dragon {
     this.walkPhase = 0;
     this.tailSway = 0;
     this.mats = {
-      body: new THREE.MeshStandardMaterial({ color: look.body, roughness: 0.65, flatShading: true }),
-      belly: new THREE.MeshStandardMaterial({ color: look.belly, roughness: 0.7, flatShading: true }),
-      accent: new THREE.MeshStandardMaterial({ color: look.accent, roughness: 0.5, flatShading: true }),
-      wing: new THREE.MeshStandardMaterial({ color: look.wing, roughness: 0.8, side: THREE.DoubleSide, flatShading: true }),
-      eye: new THREE.MeshBasicMaterial({ color: new THREE.Color(look.eye).multiplyScalar(3) }),
+      body: new THREE.MeshStandardMaterial({ roughness: 0.65, flatShading: true }),
+      belly: new THREE.MeshStandardMaterial({ roughness: 0.7, flatShading: true }),
+      accent: new THREE.MeshStandardMaterial({ roughness: 0.5, flatShading: true }),
+      wing: new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide, flatShading: true }),
+      eye: new THREE.MeshBasicMaterial(),
       dark: new THREE.MeshStandardMaterial({ color: 0x1b1b22, roughness: 0.9 }),
+      flame: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.1, 0.2) }),
     };
-    this.build();
+    this.label = null;
+    this.setLook(this.look);
   }
 
   setLook(look) {
     Object.assign(this.look, look);
-    this.mats.body.color.set(this.look.body);
-    this.mats.belly.color.set(this.look.belly);
-    this.mats.accent.color.set(this.look.accent);
-    this.mats.wing.color.set(this.look.wing);
-    this.mats.eye.color.set(this.look.eye).multiplyScalar(3);
+    const L = this.look, M = this.mats;
+    M.body.color.set(L.body);
+    M.belly.color.set(L.belly);
+    M.accent.color.set(L.accent);
+    M.wing.color.set(L.wing);
+    M.eye.color.set(L.eye).multiplyScalar(3);
+    M.accent.emissive.set(L.glow ? L.accent : 0x000000);
+    M.accent.emissiveIntensity = L.glow ? 1.4 : 0;
+    if (M.body.map) M.body.map.dispose();
+    M.body.map = patternTexture(L.pattern);
+    M.body.needsUpdate = true;
+    this.build();
+    if (this.label) { this.root.remove(this.label); this.label.material.map.dispose(); this.label.material.dispose(); }
+    this.label = nameSprite(L.name || 'Dragon');
+    this.label.position.y = 2.4;
+    this.root.add(this.label);
+  }
+
+  clear() {
+    while (this.pivot.children.length) {
+      const c = this.pivot.children[0];
+      this.pivot.remove(c);
+      c.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
+    }
+  }
+
+  dorsal(parent, size, x, y, z) {
+    const st = this.look.spikes;
+    if (st === 'none') return;
+    if (st === 'ridge') {
+      const r = box(0.12, size * 0.75, size * 1.3, this.mats.accent);
+      r.position.set(x, y - size * 0.1, z);
+      parent.add(r);
+    } else {
+      const s = spike(size, this.mats.accent);
+      s.position.set(x, y, z);
+      parent.add(s);
+    }
   }
 
   build() {
-    const M = this.mats;
+    this.clear();
+    const M = this.mats, L = this.look;
     const pv = this.pivot;
 
     // torso
-    const torso = box(0.95, 0.8, 1.7, M.body);
-    pv.add(torso);
+    pv.add(box(0.95, 0.8, 1.7, M.body));
     const belly = box(0.8, 0.28, 1.55, M.belly);
     belly.position.set(0, -0.36, 0);
     pv.add(belly);
-    for (let i = 0; i < 4; i++) {
-      const s = spike(0.34 - i * 0.03, M.accent);
-      s.position.set(0, 0.5, -0.6 + i * 0.42);
-      pv.add(s);
-    }
+    for (let i = 0; i < 4; i++) this.dorsal(pv, 0.34 - i * 0.03, 0, 0.5, -0.6 + i * 0.42);
 
     // neck (chain of 3) + head
     this.neck = [];
@@ -79,9 +171,7 @@ export class Dragon {
       const seg = box(0.55 - i * 0.05, 0.55 - i * 0.05, 0.62, M.body);
       seg.position.z = -0.28;
       g.add(seg);
-      const sp = spike(0.24, M.accent);
-      sp.position.set(0, 0.34 - i * 0.03, -0.28);
-      g.add(sp);
+      this.dorsal(g, 0.24, 0, 0.34 - i * 0.03, -0.28);
       this.neck.push(g);
       parent = g;
       at = new THREE.Vector3(0, 0.02, -0.58);
@@ -93,12 +183,15 @@ export class Dragon {
     const skull = box(0.72, 0.6, 0.72, M.body);
     skull.position.z = -0.3;
     head.add(skull);
-    const snout = box(0.5, 0.3, 0.55, M.body);
-    snout.position.set(0, -0.08, -0.82);
+    const long = L.snout === 'long';
+    const sLen = long ? 0.95 : 0.55;
+    const snout = box(long ? 0.42 : 0.5, 0.3, sLen, M.body);
+    snout.position.set(0, -0.08, -0.55 - sLen / 2);
     head.add(snout);
-    const jaw = box(0.46, 0.14, 0.5, M.belly);
-    jaw.position.set(0, -0.28, -0.8);
+    const jaw = box(long ? 0.38 : 0.46, 0.14, sLen - 0.05, M.belly);
+    jaw.position.set(0, -0.28, -0.55 - sLen / 2);
     head.add(jaw);
+    this.mouthZ = -0.55 - sLen - 0.1;
     for (const s of [-1, 1]) {
       const eye = box(0.14, 0.14, 0.14, M.eye);
       eye.position.set(0.3 * s, 0.1, -0.5);
@@ -106,19 +199,12 @@ export class Dragon {
       const pupil = box(0.06, 0.1, 0.06, M.dark);
       pupil.position.set(0.37 * s, 0.1, -0.52);
       head.add(pupil);
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.6, 5), M.accent);
-      horn.position.set(0.24 * s, 0.4, 0.0);
-      horn.rotation.x = 0.7;
-      horn.rotation.z = -0.25 * s;
-      horn.castShadow = true;
-      head.add(horn);
       const nostril = box(0.07, 0.07, 0.07, M.dark);
-      nostril.position.set(0.12 * s, 0.02, -1.1);
+      nostril.position.set(0.12 * s, 0.02, this.mouthZ + 0.05);
       head.add(nostril);
+      this.horn(head, s, L.horns);
     }
-    const crest = spike(0.3, M.accent);
-    crest.position.set(0, 0.42, -0.2);
-    head.add(crest);
+    this.dorsal(head, 0.3, 0, 0.42, -0.2);
 
     // tail (chain of 7, tapering)
     this.tail = [];
@@ -132,22 +218,12 @@ export class Dragon {
       const seg = box(0.55 * t + 0.1, 0.5 * t + 0.1, 0.6, M.body);
       seg.position.z = 0.28;
       g.add(seg);
-      if (i < 6) {
-        const sp = spike(0.26 * t + 0.08, M.accent);
-        sp.position.set(0, 0.3 * t + 0.1, 0.28);
-        g.add(sp);
-      }
+      if (i < 6) this.dorsal(g, 0.26 * t + 0.08, 0, 0.3 * t + 0.1, 0.28);
       this.tail.push(g);
       parent = g;
       at = new THREE.Vector3(0, 0, 0.58);
     }
-    // tail tip: a little spade
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 4), M.accent);
-    tip.rotation.x = Math.PI / 2;
-    tip.rotation.z = Math.PI / 4;
-    tip.position.z = 0.9;
-    tip.castShadow = true;
-    parent.add(tip);
+    this.tailTip(parent, L.tail);
 
     // legs
     this.legs = [];
@@ -166,6 +242,7 @@ export class Dragon {
 
     // wings
     this.wings = [];
+    const style = WING_STYLE[L.wings] || WING_STYLE.bat;
     for (const s of [1, -1]) {
       const shoulder = new THREE.Group();
       shoulder.position.set(0.4, 0.3, -0.25);
@@ -187,7 +264,7 @@ export class Dragon {
       const fingers = [];
       const tips = [];
       for (let f = 0; f < 3; f++) {
-        const len = FINGER_LEN[f], ang = FINGER_ANGLE[f];
+        const len = FINGER_LEN[f] * style.len, ang = FINGER_ANGLE[f];
         const fg = new THREE.Group();
         fg.position.x = 1.55;
         fg.rotation.y = -ang;
@@ -198,16 +275,70 @@ export class Dragon {
         fingers.push(fg);
         tips.push([1.55 + len * Math.cos(ang), len * Math.sin(ang)]);
       }
-      // scalloped trailing edge: pull the midpoints between finger tips toward the wrist
-      const scallop = (p, q) => [(p[0] + q[0]) / 2 - 0.3, (p[1] + q[1]) / 2 - 0.35];
+      const scallop = (p, q) => [(p[0] + q[0]) / 2 - style.scallop[0], (p[1] + q[1]) / 2 - style.scallop[1]];
       const mem2 = this.membrane([[0, 0], [1.55, 0], tips[0], scallop(tips[0], tips[1]), tips[1], scallop(tips[1], tips[2]), tips[2], [0.25, 0.95]], M.wing);
       mem2.position.set(0, -0.02, 0.1);
       elbow.add(mem2);
-      // inner membrane between the body and the elbow
       const mem1 = this.membrane([[0, 0], [1.5, 0], [1.4, 0.8], [0.8, 1.05], [0, 0.95]], M.wing);
       mem1.position.set(0, -0.02, 0.1);
       shoulder.add(mem1);
       this.wings.push({ shoulder, elbow, fingers, mem1, mem2, s });
+    }
+  }
+
+  horn(head, s, kind) {
+    const M = this.mats;
+    if (kind === 'none') return;
+    if (kind === 'curved') {
+      // a ram-style horn: three shrinking blocks arcing back, up and forward
+      for (const [x, y, z, w] of [[0.3, 0.38, 0.05, 0.18], [0.36, 0.55, 0.18, 0.14], [0.34, 0.7, 0.16, 0.1]]) {
+        const b = box(w, w, w * 1.4, M.accent);
+        b.position.set(x * s, y, z);
+        head.add(b);
+      }
+      return;
+    }
+    const long = kind === 'long';
+    const h = new THREE.Mesh(new THREE.ConeGeometry(long ? 0.13 : 0.11, long ? 1.05 : 0.6, 5), M.accent);
+    h.position.set(0.24 * s, long ? 0.5 : 0.4, long ? 0.12 : 0);
+    h.rotation.x = long ? 1.0 : 0.7;
+    h.rotation.z = -0.25 * s;
+    h.castShadow = true;
+    head.add(h);
+  }
+
+  tailTip(parent, kind) {
+    const M = this.mats;
+    if (kind === 'club') {
+      const c = box(0.5, 0.5, 0.5, M.accent);
+      c.position.z = 0.55;
+      parent.add(c);
+      for (const s of [-1, 1]) {
+        const sp = spike(0.3, M.accent);
+        sp.rotation.z = (Math.PI / 2) * s;
+        sp.position.set(0.38 * s, 0, 0.55);
+        parent.add(sp);
+      }
+    } else if (kind === 'flame') {
+      for (const [dx, dy, dz, sz] of [[0, 0.05, 0.75, 0.7], [0.12, 0.2, 0.7, 0.45], [-0.12, 0.15, 0.68, 0.5]]) {
+        const f = new THREE.Mesh(new THREE.ConeGeometry(0.17, sz, 5), M.flame);
+        f.rotation.x = Math.PI / 2;
+        f.position.set(dx, dy, dz + sz / 2);
+        parent.add(f);
+      }
+    } else if (kind === 'plain') {
+      const t = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.7, 4), M.body);
+      t.rotation.x = Math.PI / 2; t.rotation.z = Math.PI / 4;
+      t.position.z = 0.8;
+      t.castShadow = true;
+      parent.add(t);
+    } else {
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 4), M.accent);
+      tip.rotation.x = Math.PI / 2;
+      tip.rotation.z = Math.PI / 4;
+      tip.position.z = 0.9;
+      tip.castShadow = true;
+      parent.add(tip);
     }
   }
 
@@ -224,7 +355,7 @@ export class Dragon {
     return m;
   }
 
-  // state: { flying, speed (0..), vy, boosting, yaw, pitch, roll, moving, breathing }
+  // state: { flying, speed, vy, boosting, yaw, pitch, roll, lookYaw, lookPitch, breathing }
   update(dt, s) {
     const pv = this.pivot;
     pv.rotation.set(s.pitch, s.yaw, s.roll, 'YXZ');
@@ -253,15 +384,13 @@ export class Dragon {
         w.fingers[f].rotation.y = -THREE.MathUtils.lerp(0.08 + f * 0.05, FINGER_ANGLE[f], sp);
       }
     }
-    // body bob
     pv.position.y = 0.3 + (s.flying ? Math.sin(this.phase * Math.PI) * 0.06 : 0);
 
     // tail follows turning + gentle idle sway
     this.tailSway = THREE.MathUtils.lerp(this.tailSway, -s.roll * 1.4, 1 - Math.exp(-3 * dt));
     for (let i = 0; i < this.tail.length; i++) {
       const g = this.tail[i];
-      const wave = Math.sin(t * 2.2 - i * 0.7) * 0.07 + this.tailSway * 0.25;
-      g.rotation.y = wave;
+      g.rotation.y = Math.sin(t * 2.2 - i * 0.7) * 0.07 + this.tailSway * 0.25;
       g.rotation.x = (s.flying ? -s.pitch * 0.08 : 0.04) + Math.sin(t * 1.6 - i * 0.6) * 0.03;
     }
     // neck/head: head leans up in flight, looks where the camera looks
@@ -289,6 +418,6 @@ export class Dragon {
   // world position of the mouth, for fire
   mouthWorld(out) {
     this.head.updateWorldMatrix(true, false);
-    return out.set(0, -0.12, -1.15).applyMatrix4(this.head.matrixWorld);
+    return out.set(0, -0.12, this.mouthZ).applyMatrix4(this.head.matrixWorld);
   }
 }
