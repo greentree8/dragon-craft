@@ -6,11 +6,11 @@ Dragon Craft is a fully static site (no build step, no server process). Serving 
 
 `gordhamer.com` itself does **not** point at this VPS (DNS sends it elsewhere), so
 `gordhamer.com/dragon-craft` can't be served from here. The other apps here live on subdomains
-(`temple.`, `explore.`, `describe.`), so the matching choice is **`dragon.gordhamer.com`**.
+(`temple.`, `explore.`, `describe.`), so the matching choice is **`dragon-craft.gordhamer.com`**.
 
 ## One-time setup (needs root)
 
-1. DNS: add an `A` record `dragon.gordhamer.com` -> this VPS's IP.
+1. DNS: add an `A` record `dragon-craft.gordhamer.com` -> this VPS's IP.
 2. Install the nginx site and the TLS cert:
 
    ```sh
@@ -18,7 +18,7 @@ Dragon Craft is a fully static site (no build step, no server process). Serving 
    sudo ln -s /etc/nginx/sites-available/dragon /etc/nginx/sites-enabled/dragon
    sudo mkdir -p /var/www/dragon && sudo chown $USER /var/www/dragon
    sudo nginx -t && sudo systemctl reload nginx
-   sudo certbot --nginx -d dragon.gordhamer.com
+   sudo certbot --nginx -d dragon-craft.gordhamer.com
    ```
 
 ## Every deploy
