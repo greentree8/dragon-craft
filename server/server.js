@@ -15,7 +15,7 @@ const ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://dragon.gordhamer.com,ht
 
 const MAX_PLAYERS = 8, MAX_ROOMS = 50, MAX_EDITS_PER_ROOM = 600000, DAY_LENGTH = 600;
 const CHUNK_VOLUME = 16 * 128 * 16, MAX_BLOCK_ID = 30, CHUNK_LIMIT = 4000;
-const LOOK_STRINGS = ['horns', 'tail', 'wings', 'spikes', 'pattern', 'snout'];
+const LOOK_STRINGS = ['horns', 'tail', 'wings', 'wingpairs', 'spikes', 'pattern', 'snout'];
 const LOOK_COLORS = ['body', 'belly', 'accent', 'wing', 'eye'];
 
 fs.mkdirSync(DATA, { recursive: true });

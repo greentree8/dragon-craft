@@ -92,7 +92,7 @@ export class UI {
       this.changeLook({
         body: col(h, 0.6, 0.45), belly: col(h + 0.08, 0.5, 0.78), accent: col(h + 0.5, 0.85, 0.55),
         wing: col(h + 0.33, 0.6, 0.45), eye: col(h + 0.15, 0.9, 0.7),
-        horns: pick(LOOK_OPTIONS.horns), tail: pick(LOOK_OPTIONS.tail), wings: pick(LOOK_OPTIONS.wings),
+        horns: pick(LOOK_OPTIONS.horns), tail: pick(LOOK_OPTIONS.tail), wings: pick(LOOK_OPTIONS.wings), wingpairs: pick(LOOK_OPTIONS.wingpairs),
         spikes: pick(LOOK_OPTIONS.spikes), pattern: pick(LOOK_OPTIONS.pattern), snout: pick(LOOK_OPTIONS.snout),
       });
       this.syncDragonTab();
@@ -111,7 +111,7 @@ export class UI {
 
     const shapes = $('shapes');
     this.shapeButtons = {};
-    const labels = { horns: 'Horns', tail: 'Tail', wings: 'Wings', spikes: 'Spikes', pattern: 'Pattern', snout: 'Snout' };
+    const labels = { horns: 'Horns', tail: 'Tail', wings: 'Wings', wingpairs: 'Wing pairs', spikes: 'Spikes', pattern: 'Pattern', snout: 'Snout' };
     for (const [key, opts] of Object.entries(LOOK_OPTIONS)) {
       const row = document.createElement('div');
       row.className = 'row';

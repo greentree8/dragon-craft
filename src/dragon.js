@@ -7,13 +7,14 @@ import { sweep, lineSweep, membraneGeometry } from './sweep.js';
 export const DEFAULT_LOOK = {
   name: 'Ember',
   body: 0x2fa84f, belly: 0xe8d48a, accent: 0xff7a1a, wing: 0xd9402b, eye: 0xffe14d,
-  horns: 'short', tail: 'spade', wings: 'bat', spikes: 'spikes', pattern: 'none', snout: 'short', glow: false,
+  horns: 'short', tail: 'spade', wings: 'bat', wingpairs: 'two', spikes: 'spikes', pattern: 'none', snout: 'short', glow: false,
 };
 
 export const LOOK_OPTIONS = {
   horns: ['short', 'long', 'curved', 'none'],
   tail: ['spade', 'club', 'flame', 'plain'],
   wings: ['bat', 'spiky', 'round'],
+  wingpairs: ['two', 'four'],
   spikes: ['spikes', 'ridge', 'none'],
   pattern: ['none', 'stripes', 'spots'],
   snout: ['short', 'long'],
@@ -290,10 +291,12 @@ export class Dragon {
     // ---- wings: tapered arm bones, finger bones fanning back, and a sagging membrane between them ----
     this.wings = [];
     const style = WING_STYLE[L.wings] || WING_STYLE.bat;
-    for (const s of [1, -1]) {
+    // two wings, or four: a second, smaller pair sits behind the first and beats a little later
+    const pairs = L.wingpairs === 'four' ? [{ y: 0.3, z: -0.3, k: 1, delay: 0 }, { y: 0.24, z: 0.42, k: 0.82, delay: 0.8 }] : [{ y: 0.3, z: -0.25, k: 1, delay: 0 }];
+    for (const pair of pairs) for (const s of [1, -1]) {
       const shoulder = new THREE.Group();
-      shoulder.position.set(0.4, 0.3, -0.25);
-      if (s < 0) { shoulder.scale.x = -1; shoulder.position.x = -0.4; }
+      shoulder.position.set(0.4 * s, pair.y, pair.z);
+      shoulder.scale.set(s * pair.k, pair.k, pair.k); // the left wing is a mirrored copy
       pv.add(shoulder);
       add(shoulder, lineSweep([0, 0, 0], [1.5, 0, 0], (t) => [0.15 * (1 - t) + 0.055 * t, 0.13 * (1 - t) + 0.05 * t], 7, 10, 0.8), M.body);
       add(shoulder, softGeometry(0.22, 0.2, 0.22, 1), M.accent, 1.48, 0, 0);
@@ -323,7 +326,7 @@ export class Dragon {
       mem1.position.set(0, -0.02, 0.1);
       mem1.castShadow = true;
       shoulder.add(mem1);
-      this.wings.push({ shoulder, elbow, fingers, mem1, mem2, s });
+      this.wings.push({ shoulder, elbow, fingers, mem1, mem2, s, delay: pair.delay });
     }
   }
 
@@ -386,9 +389,10 @@ export class Dragon {
     const flap = Math.sin(this.phase * Math.PI * 2 * 0.5);
     for (const w of this.wings) {
       // the left wing is a mirrored copy (scale.x = -1), so its shoulder angles are negated to move in sync
-      w.shoulder.rotation.z = w.s * THREE.MathUtils.lerp(-0.2, 0.18 + amp * flap, sp);
+      const fl = w.delay ? Math.sin(this.phase * Math.PI - w.delay) : flap;
+      w.shoulder.rotation.z = w.s * THREE.MathUtils.lerp(-0.2, 0.18 + amp * fl, sp);
       w.shoulder.rotation.y = w.s * THREE.MathUtils.lerp(-1.2, 0.0, sp); // fold back along the body
-      w.elbow.rotation.z = THREE.MathUtils.lerp(-0.1, 0.5 * amp * Math.sin(this.phase * Math.PI - 0.9) - 0.08, sp);
+      w.elbow.rotation.z = THREE.MathUtils.lerp(-0.1, 0.5 * amp * Math.sin(this.phase * Math.PI - 0.9 - w.delay) - 0.08, sp);
       w.elbow.rotation.y = THREE.MathUtils.lerp(-0.25, 0.0, sp); // forearm lies along the body
       const fold = THREE.MathUtils.lerp(0.25, 1, sp); // membranes gather up when the wing folds
       w.mem1.scale.z = fold; w.mem2.scale.z = fold;

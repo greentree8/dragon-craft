@@ -31,6 +31,7 @@ see [deploy/README.md](deploy/README.md).
 | W A S D, mouse | fly / walk, steer |
 | Space / C / Shift | rise (and take off) / descend / boost |
 | 1 | breath: hold left click (or F) for fire, right click (or G) for ice |
+| Z / X / B | lightning (chains between enemies) / explosive fireball (craters the ground) / roar shockwave; each has a cooldown |
 | 2-7 | blocks (Stone Bricks stay cubic for building; dirt, stone, sand and grass are sculpted smooth): left-click breaks, right-click places, middle-click copies |
 | E | choose which blocks are in your hotbar |
 | 8 / 9 | apple / fire-roasted meat: right-click or R to eat |
@@ -44,9 +45,14 @@ see [deploy/README.md](deploy/README.md).
 Terrain and leaves are drawn as smooth rounded surfaces (`src/smooth.js`), trunks as round logs, and the dragon
 and animals from rounded parts. Collisions and building still use blocks underneath.
 
-## The castle
+## Your dragon
 
-A castle stands about 150 blocks east of spawn (look for the walls and the gold flag; the debug overlay `?debug` shows your position, it is near x 136, z 72).
+Esc, then the dragon tab: colors, horns, tail, wings (and **two or four wings**), spikes, pattern and snout.
+
+## The castles
+
+Three castles stand far from spawn: about x 136 z 72 (east), x -24 z 324 (south) and x 324 z -108 (far east). The radar shows the nearest one. Look for the walls and the gold flag.
+Each has a **Dread Drake**, a big enemy dragon that perches on the keep, circles you, hurls fireballs, dives to bite, and breathes fire or frost when it is badly hurt. Fire only does half damage to its scales; lightning, fireballs and the roar go straight through, and ice slows it. If you flee it heals.
 Knights chase you on the ground, archers shoot arrows from the walls and towers, and the Castle Lord guards the keep.
 Fire burns them; ice freezes them in place (frozen guards take double fire damage). Defeat the Castle Lord for loot.
 Ice also turns water into ice blocks and cools lava into rock. The guards come back a few minutes after you clear the castle.
