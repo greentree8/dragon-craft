@@ -7,7 +7,7 @@ export const DRAKE_LOOK = {
   name: 'Dread Drake', body: 0x4a1216, belly: 0x2b1214, accent: 0xffa21a, wing: 0x2a0b0e, eye: 0xff3b1f,
   horns: 'long', tail: 'club', wings: 'spiky', spikes: 'spikes', pattern: 'none', snout: 'long', glow: true,
 };
-export const DRAKE_MAX_HP = 170;
+export const DRAKE_MAX_HP = 90;
 const SCALE = 1.8, RADIUS = 2.4;
 
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -41,7 +41,7 @@ export class Drake {
     if (this.dead) return;
     if (kind === 'ice') { this.chill = 3; this.hp -= amount * 0.7; }
     else if (kind === 'bolt') this.hp -= amount; // lightning, blasts and roars go straight through the scales
-    else this.hp -= amount * (this.chill > 0 ? 0.75 : 0.5); // thick scales: fire only does half
+    else this.hp -= amount * (this.chill > 0 ? 1 : 0.8); // thick scales: fire does a bit less
     this.flash = 0.12;
     if (this.state === 'perch' || this.state === 'return') this.setState('circle', 3);
   }
@@ -138,7 +138,7 @@ export class Drake {
       case 'swoop': {
         const target = this._v.copy(pp);
         this.steer(target, 27 * mul, dt, 3.2);
-        if (!this.biteDone && dist < 5.5) { this.biteDone = true; hooks.hit(6, 'dragon'); this.setState('recover', 1.8); this.biteDone = true; }
+        if (!this.biteDone && dist < 5.5) { this.biteDone = true; hooks.hit(4, 'dragon'); this.setState('recover', 1.8); this.biteDone = true; }
         else if (this.t <= 0) this.setState('recover', 1.6);
         break;
       }
@@ -160,7 +160,7 @@ export class Drake {
           this.breathHit -= dt;
           if (this.breathHit <= 0 && this._v.distanceTo(pp) < 18) {
             this.breathHit = 0.5;
-            hooks.hit(this.frost ? 2 : 3, 'dragon');
+            hooks.hit(this.frost ? 1.5 : 2, 'dragon');
             if (this.frost) hooks.chill(2.5);
           }
         }

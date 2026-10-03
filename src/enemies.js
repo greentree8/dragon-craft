@@ -196,7 +196,7 @@ export class Enemies {
     mesh.castShadow = kind === 'arrow';
     mesh.position.copy(from);
     this.scene.add(mesh);
-    this.arrows.push({ mesh, pos: from.clone(), vel, kind, life: 6, dmg: kind === 'fireball' ? 4 : kind === 'bolt' ? 4 : 2, grav });
+    this.arrows.push({ mesh, pos: from.clone(), vel, kind, life: 6, dmg: kind === 'fireball' ? 3 : kind === 'bolt' ? 3 : 2, grav });
   }
 
   lineOfSight(from, to) {

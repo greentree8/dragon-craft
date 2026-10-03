@@ -178,7 +178,7 @@ export class UI {
   setVitals(health, hunger) {
     this.fill(this.heartsEl, health, MAX_HEALTH);
     this.fill(this.hungerEl, hunger, MAX_HUNGER);
-    this.heartsEl.classList.toggle('low', health <= 6);
+    this.heartsEl.classList.toggle('low', health <= 12);
   }
 
   fill(el, value, max) {

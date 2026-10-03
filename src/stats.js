@@ -1,5 +1,5 @@
 // Health and hunger. Tuned to be forgiving: starving never kills, and there is no fall damage.
-export const MAX_HEALTH = 20;
+export const MAX_HEALTH = 40; // 10 hearts, 4 points each
 export const MAX_HUNGER = 20;
 
 export class Vitals {
@@ -46,7 +46,7 @@ export class Vitals {
     // regenerate when well fed, starve (down to one heart) when empty
     if (this.hunger >= 14 && this.health < MAX_HEALTH) {
       this.regenT += dt;
-      if (this.regenT >= 3) { this.regenT = 0; this.health = Math.min(MAX_HEALTH, this.health + 1); this.hunger = Math.max(0, this.hunger - 0.4); this.changed = true; }
+      if (this.regenT >= 3) { this.regenT = 0; this.health = Math.min(MAX_HEALTH, this.health + 2); this.hunger = Math.max(0, this.hunger - 0.4); this.changed = true; }
     } else this.regenT = 0;
     if (this.hunger <= 0 && this.health > 2) {
       this.starveT += dt;
