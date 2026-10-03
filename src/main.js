@@ -13,6 +13,7 @@ import { Mobs } from './mobs.js';
 import { Vitals } from './stats.js';
 import { Save } from './save.js';
 import { UI } from './ui.js';
+import { Net, serverUrl } from './net.js';
 import { B, DEFS } from './blocks.js';
 import { SLOT, DEFAULT_HOTBAR, FOODS, PALETTE, BLOCK_NAMES, canBreak } from './items.js';
 import { VOLCANO, VILLAGE, CRYSTAL_ISLE, HEIGHT } from './worldgen.js';
@@ -21,7 +22,7 @@ const VERSION = '0.2.0';
 const params = new URLSearchParams(location.search);
 const LOW = params.get('q') === 'low';
 const RD = Number(params.get('rd')) || (LOW ? 5 : 7);
-const SEED = Number(params.get('seed')) || 1337;
+const SEED_PARAM = Number(params.get('seed')) || 1337;
 const WORLD = (params.get('world') || 'main').replace(/[^\w-]/g, '').slice(0, 24) || 'main';
 const SPAWN = { x: 2, z: 2 };
 
@@ -29,6 +30,12 @@ const save = new Save(WORLD);
 await save.init();
 const saved = save.loadState() || {};
 const savedLook = Save.loadLook();
+
+// multiplayer: join the room's server if there is one (add ?solo to play alone); the server decides the seed
+const net = params.has('solo') ? null : await Net.connect({
+  url: serverUrl(params, WORLD), look: { ...DEFAULT_LOOK, ...(savedLook || {}) }, seed: SEED_PARAM,
+});
+const SEED = net ? net.seed : SEED_PARAM;
 
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
@@ -42,9 +49,9 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 1000);
 scene.add(camera);
 
-const world = new World(scene, { seed: SEED, renderDistance: RD, save });
+const world = new World(scene, { seed: SEED, renderDistance: RD, save: net ? net.edits : save });
 const sky = new Sky(scene, renderer);
-sky.time = saved.time ?? 0.1;
+sky.time = net ? net.time : saved.time ?? 0.1;
 scene.fog.near = RD * 16 * 0.4;
 scene.fog.far = RD * 16 * 0.97;
 const dragon = new Dragon({ ...DEFAULT_LOOK, ...(savedLook || {}) });
@@ -52,6 +59,12 @@ scene.add(dragon.root);
 const fire = new FireBreath(scene);
 const bursts = new Bursts(scene);
 const mobs = new Mobs(scene, world, bursts);
+if (net) {
+  net.attach(scene, world);
+  net.onJoin = (name) => ui.toast(`${name} joined`);
+  net.onLeave = (name) => ui.toast(`${name} left`);
+  net.onStatus = (ok) => ui.toast(ok ? 'Reconnected' : 'Connection lost. Trying to reconnect…');
+}
 const vitals = new Vitals();
 vitals.load(saved);
 const player = new Player(world, canvas);
@@ -90,11 +103,12 @@ addEventListener('resize', () => {
 let fps = 0;
 const ui = new UI({
   look: dragon.look,
-  onLook: (l) => { dragon.setLook(l); Save.saveLook({ ...dragon.look }); },
+  onLook: (l) => { dragon.setLook(l); Save.saveLook({ ...dragon.look }); net?.send({ t: 'look', look: { ...dragon.look } }); },
   onPlay: () => canvas.requestPointerLock(),
   feedbackContext: () => [
     `Dragon Craft v${VERSION} · world "${WORLD}" · seed ${SEED}`,
     `Dragon: ${dragon.look.name} · position ${player.pos.x.toFixed(0)}, ${player.pos.y.toFixed(0)}, ${player.pos.z.toFixed(0)} · time ${sky.clockString()} · ${fps} fps`,
+    net ? `Multiplayer room "${WORLD}" · ${net.remotes.size + 1} online` : 'Single player',
     `Health ${vitals.health}/20 · hunger ${Math.ceil(vitals.hunger)}/20`,
     navigator.userAgent,
   ].join('\n'),
@@ -158,8 +172,8 @@ addEventListener('keydown', (e) => {
   if (/^Digit[1-9]$/.test(e.code)) selectSlot(Number(e.code.slice(5)) - 1);
   else if (e.code === 'KeyE') openPalette();
   else if (e.code === 'KeyR') quickEat();
-  else if (e.code === 'KeyT') sky.time = (sky.time + 0.08) % 1;
-  else if (e.code === 'KeyP') sky.paused = !sky.paused;
+  else if (e.code === 'KeyT' && !net) sky.time = (sky.time + 0.08) % 1;
+  else if (e.code === 'KeyP' && !net) sky.paused = !sky.paused;
   else if (e.code === 'Minus') player.camDist = Math.min(16, player.camDist + 1);
   else if (e.code === 'Equal') player.camDist = Math.max(3, player.camDist - 1);
 });
@@ -222,6 +236,8 @@ function handleActions(dt) {
 let lastT = performance.now();
 let started = false;
 let fpsAcc = 0, fpsN = 0, saveT = 0, deathT = 0, hungerWarned = false, orbit = 0;
+const onlineEl = document.getElementById('online');
+let onlineT = 0;
 const debug = document.getElementById('debug'), clockEl = document.getElementById('clock'), underwater = document.getElementById('underwater');
 const tmpV = new THREE.Vector3(), mouth = new THREE.Vector3(), aim = new THREE.Vector3(), vel = new THREE.Vector3();
 const center = new THREE.Vector3(), camTarget = new THREE.Vector3();
@@ -283,6 +299,7 @@ function frame() {
     yaw: player.bodyYaw, pitch: player.bodyPitch, roll: player.roll,
     lookYaw: relYaw, lookPitch: look.y, breathing: player.breathing,
   });
+  const lookPitch = look.y;
 
   // camera: gameplay view, or a slow orbit around the dragon while a menu is open
   if (player.locked) {
@@ -313,7 +330,9 @@ function frame() {
     fire.emit(mouth, aim, vel, dt);
     mobs.burnCone(mouth, aim, dt);
   }
-  fire.update(dt, player.breathing);
+  if (net) net.sendState(dt, player, { yaw: relYaw, pitch: lookPitch }, aim);
+  const othersBreathing = net ? net.update(dt, fire, mouth) : false;
+  fire.update(dt, player.breathing || othersBreathing);
   bursts.update(dt);
   if (player.ready) mobs.update(dt, player, (type) => {
     hot.food[type]++;
@@ -335,8 +354,12 @@ function frame() {
       `chunks ${s.chunks}  tris ${(s.tris / 1000).toFixed(0)}k  mobs ${mobs.list.length}  time ${sky.clockString()}  ${player.flying ? 'flying' : 'walking'}`;
   } else debug.textContent = '';
   clockEl.textContent = sky.clockString();
+  if (net && (onlineT -= dt) <= 0) {
+    onlineT = 1;
+    onlineEl.textContent = net.connected ? `👥 ${[dragon.look.name, ...net.names()].join(', ')}` : '⚠ reconnecting…';
+  }
 }
 frame();
 
 // handy for tests and future features
-window.__game = { THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE } };
+window.__game = { net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE } };

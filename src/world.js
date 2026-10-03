@@ -138,7 +138,8 @@ export class World {
   }
 
   // Changes a block, persists the edit and re-meshes the affected chunks right away.
-  setBlock(x, y, z, id) {
+  // record=false is used when applying edits that came from other players
+  setBlock(x, y, z, id, record = true) {
     if (y < 0 || y >= HEIGHT) return false;
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
     const c = this.chunks.get(key(cx, cz));
@@ -147,7 +148,7 @@ export class World {
     const idx = (y * CHUNK + lz) * CHUNK + lx;
     if (c.data[idx] === id) return false;
     c.data[idx] = id;
-    if (this.save) this.save.recordEdit(cx, cz, idx, id);
+    if (record && this.save) this.save.recordEdit(cx, cz, idx, id);
     const touched = [c];
     const dxs = [0], dzs = [0];
     if (lx < PAD) dxs.push(-1);

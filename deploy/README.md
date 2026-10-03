@@ -28,3 +28,12 @@ Dragon Craft is a fully static site (no build step, no server process). Serving 
 ```
 
 Copies only the public game files into `/var/www/dragon`.
+
+## Multiplayer server (needs root, once)
+
+```sh
+sudo ./deploy/mp-setup.sh
+```
+
+Installs the `dragon-mp` systemd service (a small Node process on 127.0.0.1:8787, edits stored in `/var/lib/dragon-craft`)
+and adds the `/ws` proxy to the nginx site. The static deploy above is still just `./deploy/deploy.sh`.
