@@ -19,6 +19,9 @@ function spike(size, mat) {
   return m;
 }
 
+const FINGER_LEN = [1.5, 1.3, 1.05];
+const FINGER_ANGLE = [0.4, 0.9, 1.4];
+
 export class Dragon {
   constructor(look = DEFAULT_LOOK) {
     this.look = { ...look };
@@ -180,26 +183,31 @@ export class Dragon {
       const fore = box(1.6, 0.16, 0.18, M.body);
       fore.position.x = 0.8;
       elbow.add(fore);
-      // finger bones fanning backward from the wrist
+      // finger bones fan backward (+Z) from the wrist; the membrane stretches between their tips
       const fingers = [];
+      const tips = [];
       for (let f = 0; f < 3; f++) {
+        const len = FINGER_LEN[f], ang = FINGER_ANGLE[f];
         const fg = new THREE.Group();
         fg.position.x = 1.55;
-        fg.rotation.y = 0.35 + f * 0.5;
-        const bone = box(1.7 - f * 0.25, 0.1, 0.1, M.accent);
-        bone.position.x = 0.85 - f * 0.12;
+        fg.rotation.y = -ang;
+        const bone = box(len, 0.1, 0.1, M.accent);
+        bone.position.x = len / 2;
         fg.add(bone);
         elbow.add(fg);
         fingers.push(fg);
+        tips.push([1.55 + len * Math.cos(ang), len * Math.sin(ang)]);
       }
-      // membranes: flat shapes in the XZ plane
-      const mem1 = this.membrane([[0, 0], [1.5, 0], [1.4, 0.9], [0.8, 1.15], [0, 1.0]], M.wing);
-      mem1.position.set(0, -0.02, 0.1);
-      shoulder.add(mem1);
-      const mem2 = this.membrane([[0, 0], [1.55, 0], [2.25, 1.0], [1.7, 1.45], [1.15, 1.2], [0.7, 1.7], [0.05, 1.15]], M.wing);
+      // scalloped trailing edge: pull the midpoints between finger tips toward the wrist
+      const scallop = (p, q) => [(p[0] + q[0]) / 2 - 0.3, (p[1] + q[1]) / 2 - 0.35];
+      const mem2 = this.membrane([[0, 0], [1.55, 0], tips[0], scallop(tips[0], tips[1]), tips[1], scallop(tips[1], tips[2]), tips[2], [0.25, 0.95]], M.wing);
       mem2.position.set(0, -0.02, 0.1);
       elbow.add(mem2);
-      this.wings.push({ shoulder, elbow, fingers, s });
+      // inner membrane between the body and the elbow
+      const mem1 = this.membrane([[0, 0], [1.5, 0], [1.4, 0.8], [0.8, 1.05], [0, 0.95]], M.wing);
+      mem1.position.set(0, -0.02, 0.1);
+      shoulder.add(mem1);
+      this.wings.push({ shoulder, elbow, fingers, mem1, mem2, s });
     }
   }
 
@@ -234,12 +242,15 @@ export class Dragon {
     const amp = gliding ? 0.08 : s.flying ? 0.62 : 0.06;
     const flap = Math.sin(this.phase * Math.PI * 2 * 0.5);
     for (const w of this.wings) {
-      w.shoulder.rotation.z = THREE.MathUtils.lerp(-0.2, 0.18 + amp * flap, sp);
-      w.shoulder.rotation.y = THREE.MathUtils.lerp(0.9, 0.0, sp); // fold back
+      // the left wing is a mirrored copy (scale.x = -1), so its shoulder angles are negated to move in sync
+      w.shoulder.rotation.z = w.s * THREE.MathUtils.lerp(-0.2, 0.18 + amp * flap, sp);
+      w.shoulder.rotation.y = w.s * THREE.MathUtils.lerp(-1.2, 0.0, sp); // fold back along the body
       w.elbow.rotation.z = THREE.MathUtils.lerp(-0.1, 0.5 * amp * Math.sin(this.phase * Math.PI - 0.9) - 0.08, sp);
-      w.elbow.rotation.y = THREE.MathUtils.lerp(-1.5, 0.0, sp); // fold the forearm back along the body
+      w.elbow.rotation.y = THREE.MathUtils.lerp(-0.25, 0.0, sp); // forearm lies along the body
+      const fold = THREE.MathUtils.lerp(0.25, 1, sp); // membranes gather up when the wing folds
+      w.mem1.scale.z = fold; w.mem2.scale.z = fold;
       for (let f = 0; f < w.fingers.length; f++) {
-        w.fingers[f].rotation.y = THREE.MathUtils.lerp(0.1, 0.35 + f * 0.5, sp);
+        w.fingers[f].rotation.y = -THREE.MathUtils.lerp(0.08 + f * 0.05, FINGER_ANGLE[f], sp);
       }
     }
     // body bob
