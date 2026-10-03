@@ -1,11 +1,24 @@
-// Fire-breath particles: pooled glowing cubes (HDR colours so bloom makes them blaze).
+// Breath particles: pooled glowing shapes (HDR colours so bloom makes them blaze). Fire by default; ICE_BREATH is the frosty variant.
 import * as THREE from 'three';
 
 const MAX = 700;
 
+export const ICE_BREATH = {
+  geometry: () => new THREE.OctahedronGeometry(0.5),
+  speed: [13, 20], spread: 0.26, lift: -0.8, drag: 1.6, rate: 140, life: [0.55, 0.95], size: [0.2, 0.42],
+  lightColor: 0x6fc4ff, lightPower: 38,
+  // white-blue -> sky blue -> deep blue, fading out
+  color(t, col) {
+    if (t < 0.25) col.setRGB(2.2, 3.0, 3.4);
+    else if (t < 0.6) col.setRGB(0.6, 1.8, 3.2);
+    else col.setRGB(0.15 + 0.4 * (1 - t), 0.5 * (1 - t) + 0.2, 1.4 * (1 - t) + 0.3);
+  },
+};
+
 export class FireBreath {
-  constructor(scene) {
-    const geo = new THREE.BoxGeometry(1, 1, 1);
+  constructor(scene, opts = {}) {
+    this.opts = { speed: [17, 26], spread: 0.16, lift: 2.2, drag: 1.2, rate: 160, life: [0.45, 0.8], size: [0.25, 0.5], lightColor: 0xff8a30, lightPower: 55, ...opts };
+    const geo = this.opts.geometry ? this.opts.geometry() : new THREE.BoxGeometry(1, 1, 1);
     const mat = new THREE.MeshBasicMaterial({
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
     });
@@ -18,7 +31,7 @@ export class FireBreath {
     this.p = [];
     for (let i = 0; i < MAX; i++) this.p.push({ life: 0, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 0, spin: 0, rot: 0 });
     this.cursor = 0;
-    this.light = new THREE.PointLight(0xff8a30, 0, 28, 1.6);
+    this.light = new THREE.PointLight(this.opts.lightColor, 0, 28, 1.6);
     scene.add(this.light);
     this._m = new THREE.Matrix4();
     this._q = new THREE.Quaternion();
@@ -31,20 +44,20 @@ export class FireBreath {
   }
 
   emit(origin, dir, inheritVel, dt) {
-    this.emitAcc += dt * 160;
+    this.emitAcc += dt * this.opts.rate;
     const n = Math.floor(this.emitAcc);
     this.emitAcc -= n;
     for (let i = 0; i < n; i++) {
       const p = this.p[this.cursor];
       this.cursor = (this.cursor + 1) % MAX;
-      const spread = 0.16;
-      const sp = 17 + Math.random() * 9;
+      const o = this.opts, spread = o.spread;
+      const sp = o.speed[0] + Math.random() * (o.speed[1] - o.speed[0]);
       p.x = origin.x + (Math.random() - 0.5) * 0.15; p.y = origin.y + (Math.random() - 0.5) * 0.15; p.z = origin.z + (Math.random() - 0.5) * 0.15;
       p.vx = dir.x * sp + (Math.random() - 0.5) * spread * sp + inheritVel.x;
-      p.vy = dir.y * sp + (Math.random() - 0.5) * spread * sp + inheritVel.y + 0.8;
+      p.vy = dir.y * sp + (Math.random() - 0.5) * spread * sp + inheritVel.y + (o.lift > 0 ? 0.8 : 0);
       p.vz = dir.z * sp + (Math.random() - 0.5) * spread * sp + inheritVel.z;
-      p.max = p.life = 0.45 + Math.random() * 0.35;
-      p.size = 0.25 + Math.random() * 0.25;
+      p.max = p.life = o.life[0] + Math.random() * (o.life[1] - o.life[0]);
+      p.size = o.size[0] + Math.random() * (o.size[1] - o.size[0]);
       p.rot = Math.random() * 6; p.spin = (Math.random() - 0.5) * 8;
     }
     this._lightTarget = origin.clone().addScaledVector(dir, 5);
@@ -58,8 +71,8 @@ export class FireBreath {
       if (p.life > 0) {
         p.life -= dt;
         p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
-        p.vy += 2.2 * dt; // hot air rises
-        p.vx *= 1 - 1.2 * dt; p.vz *= 1 - 1.2 * dt;
+        p.vy += this.opts.lift * dt; // hot air rises, frost sinks
+        p.vx *= 1 - this.opts.drag * dt; p.vz *= 1 - this.opts.drag * dt;
         p.rot += p.spin * dt;
       }
       if (p.life > 0) {
@@ -70,8 +83,8 @@ export class FireBreath {
         this._q.setFromEuler(this._e);
         this._s.setScalar(size);
         this._m.compose(this._pos, this._q, this._s);
-        // white-hot -> yellow -> orange -> dull red, fading out
-        if (t < 0.25) col.setRGB(3.2, 2.6, 1.2);
+        if (this.opts.color) this.opts.color(t, col);
+        else if (t < 0.25) col.setRGB(3.2, 2.6, 1.2); // white-hot -> yellow -> orange -> dull red
         else if (t < 0.6) col.setRGB(3.0, 1.3, 0.2);
         else col.setRGB(1.6 * (1 - t) + 0.2, 0.3 * (1 - t), 0.05);
         const fade = Math.min(1, p.life / (p.max * 0.35));
@@ -88,7 +101,7 @@ export class FireBreath {
     this.mesh.instanceColor.needsUpdate = true;
     this.active = alive;
     const target = breathing && this._lightTarget ? 1 : 0;
-    this.light.intensity += (target * (55 + Math.random() * 20) - this.light.intensity) * Math.min(1, dt * 14);
+    this.light.intensity += (target * (this.opts.lightPower + Math.random() * 20) - this.light.intensity) * Math.min(1, dt * 14);
     if (this._lightTarget) this.light.position.copy(this._lightTarget);
   }
 }

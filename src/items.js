@@ -6,7 +6,7 @@ export const SLOT = { FIRE: 0, FIRST_BLOCK: 1, LAST_BLOCK: 6, APPLE: 7, MEAT: 8 
 export const DEFAULT_HOTBAR = [B.PLANKS, B.COBBLE, B.LOG, B.STONE_BRICK, B.LANTERN, B.CRYSTAL_CYAN];
 
 export const BLOCK_NAMES = {
-  [B.GRASS]: 'Grass', [B.DIRT]: 'Dirt', [B.STONE]: 'Stone', [B.STONE_BRICK]: 'Stone Bricks', [B.COBBLE]: 'Cobblestone', [B.SAND]: 'Sand',
+  [B.GRASS]: 'Grass', [B.DIRT]: 'Dirt', [B.STONE]: 'Stone', [B.STONE_BRICK]: 'Stone Bricks', [B.ICE]: 'Ice', [B.COBBLE]: 'Cobblestone', [B.SAND]: 'Sand',
   [B.SNOW]: 'Snow', [B.PLANKS]: 'Planks', [B.LOG]: 'Log', [B.LEAVES]: 'Leaves', [B.PINK_LEAVES]: 'Pink Leaves',
   [B.BASALT]: 'Basalt', [B.ASH]: 'Ash', [B.GOLD]: 'Gold', [B.LANTERN]: 'Lantern',
   [B.CRYSTAL_PURPLE]: 'Purple Crystal', [B.CRYSTAL_CYAN]: 'Cyan Crystal', [B.CACTUS]: 'Cactus',

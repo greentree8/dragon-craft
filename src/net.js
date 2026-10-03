@@ -122,7 +122,7 @@ export class Net {
     if (!r.hasPos) { r.pos.copy(r.target); r.hasPos = true; }
     const st = r.st;
     st.flying = !!s.f; st.speed = s.sp; st.vy = s.vy; st.boosting = !!s.b;
-    st.yaw = s.y; st.pitch = s.pi; st.roll = s.r; st.lookYaw = s.ly; st.lookPitch = s.lp; st.breathing = !!s.br;
+    st.yaw = s.y; st.pitch = s.pi; st.roll = s.r; st.lookYaw = s.ly; st.lookPitch = s.lp; st.breathing = !!s.br; st.ice = s.br === 2;
     if (s.a) r.aim.set(s.a[0], s.a[1], s.a[2]).normalize();
   }
 
@@ -137,27 +137,27 @@ export class Net {
   names() { return [...this.remotes.values()].map((r) => r.name); }
 
   // smooth other dragons toward their last reported state, and breathe their fire
-  update(dt, fire, mouth) {
-    let breathing = false;
+  update(dt, pools, mouth) {
+    const out = { fire: false, ice: false };
     const k = 1 - Math.exp(-12 * dt);
     for (const r of this.remotes.values()) {
       r.pos.lerp(r.target, k);
       r.dragon.root.position.copy(r.pos);
       r.dragon.update(dt, r.st);
       if (r.st.breathing) {
-        breathing = true;
+        out[r.st.ice ? 'ice' : 'fire'] = true;
         r.dragon.root.updateMatrixWorld(true);
         r.dragon.mouthWorld(mouth);
-        fire.emit(mouth, r.aim, NO_VEL, dt);
+        pools[r.st.ice ? 'ice' : 'fire'].emit(mouth, r.aim, NO_VEL, dt);
       }
     }
-    return breathing;
+    return out;
   }
 
   // called every frame with the local player's state; sends ~15 times a second
   sendState(dt, player, look, aim) {
     this.sendT -= dt;
-    const br = player.breathing ? 1 : 0;
+    const br = player.breathing ? (player.breathingIce ? 2 : 1) : 0;
     if (this.sendT > 0 && br === this.lastBr) return;
     this.sendT = 1 / 15;
     this.lastBr = br;

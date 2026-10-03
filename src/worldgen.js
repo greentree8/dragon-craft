@@ -1,6 +1,7 @@
 // Procedural terrain: a pure function of (seed, x, y, z) so chunks always agree at their borders.
 import { Noise, hash2, smoothstep, clamp, mix } from './noise.js';
 import { B } from './blocks.js';
+import { CASTLE, castleBlock } from './castle.js';
 
 export const CHUNK = 16;
 export const HEIGHT = 128;
@@ -167,6 +168,7 @@ export class WorldGen {
 
     this.stampTrees(data, cx, cz);
     this.stampVillage(data, cx, cz);
+    this.stampCastle(data, cx, cz);
     this.stampCrystals(data, cx, cz);
     return data;
   }
@@ -182,6 +184,41 @@ export class WorldGen {
 
   nearVillage(x, z, pad = 0) {
     return x > VILLAGE.x - 20 - pad && x < VILLAGE.x + 22 + pad && z > VILLAGE.z - 18 - pad && z < VILLAGE.z + 22 + pad;
+  }
+
+  nearCastle(x, z, pad = 0) {
+    return Math.abs(x - CASTLE.x) <= CASTLE.reach + pad && Math.abs(z - CASTLE.z) <= CASTLE.reach + pad;
+  }
+
+  // y of the castle's courtyard floor layer: the average ground height under it
+  castleBase() {
+    if (this._castleBase === undefined) {
+      let sum = 0, n = 0;
+      for (const dx of [-16, 0, 16]) for (const dz of [-16, 0, 16]) { sum += this.height(CASTLE.x + dx, CASTLE.z + dz); n++; }
+      this._castleBase = Math.round(sum / n);
+    }
+    return this._castleBase;
+  }
+
+  stampCastle(data, cx, cz) {
+    const ox = cx * CHUNK, oz = cz * CHUNK;
+    if (ox > CASTLE.x + CASTLE.reach || ox + CHUNK <= CASTLE.x - CASTLE.reach) return;
+    if (oz > CASTLE.z + CASTLE.reach || oz + CHUNK <= CASTLE.z - CASTLE.reach) return;
+    const base = this.castleBase();
+    for (let lz = 0; lz < CHUNK; lz++) for (let lx = 0; lx < CHUNK; lx++) {
+      const dx = ox + lx - CASTLE.x, dz = oz + lz - CASTLE.z;
+      if (Math.max(Math.abs(dx), Math.abs(dz)) > CASTLE.reach) continue;
+      // foundation down to solid ground, so it never hovers over a dip
+      for (let y = base - 1; y > 2; y--) {
+        const i = (y * CHUNK + lz) * CHUNK + lx;
+        if (data[i] !== B.AIR && data[i] !== B.WATER) break;
+        data[i] = B.STONE_BRICK;
+      }
+      for (let dy = 0; dy <= 26; dy++) {
+        const id = castleBlock(dx, dy, dz);
+        if (id !== undefined) data[((base + dy) * CHUNK + lz) * CHUNK + lx] = id;
+      }
+    }
   }
 
   stampTrees(data, cx, cz) {
@@ -210,7 +247,7 @@ export class WorldGen {
         }
 
         const h = this.height(px, pz);
-        if (h <= SEA + 1 || h > 62 || this.nearVillage(px, pz, 3)) continue;
+        if (h <= SEA + 1 || h > 62 || this.nearVillage(px, pz, 3) || this.nearCastle(px, pz, 3)) continue;
         if (this.volcanoDist(px, pz) < VOLCANO.radius) continue;
         // skip if a cave punched out the ground here (ground must be solid)
         const { temp, moist } = this.climate(px, pz);

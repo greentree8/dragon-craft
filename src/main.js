@@ -7,9 +7,10 @@ import { World } from './world.js';
 import { Sky } from './sky.js';
 import { Dragon, DEFAULT_LOOK } from './dragon.js';
 import { Player } from './player.js';
-import { FireBreath } from './fire.js';
+import { FireBreath, ICE_BREATH } from './fire.js';
 import { Bursts } from './effects.js';
 import { Mobs } from './mobs.js';
+import { Enemies } from './enemies.js';
 import { Vitals } from './stats.js';
 import { Save } from './save.js';
 import { UI } from './ui.js';
@@ -17,6 +18,7 @@ import { Net, serverUrl } from './net.js';
 import { B, DEFS } from './blocks.js';
 import { SLOT, DEFAULT_HOTBAR, FOODS, PALETTE, BLOCK_NAMES, canBreak } from './items.js';
 import { VOLCANO, VILLAGE, CRYSTAL_ISLE, HEIGHT } from './worldgen.js';
+import { CASTLE } from './castle.js';
 
 const VERSION = '0.2.0';
 const params = new URLSearchParams(location.search);
@@ -57,6 +59,7 @@ scene.fog.far = RD * 16 * 0.97;
 const dragon = new Dragon({ ...DEFAULT_LOOK, ...(savedLook || {}) });
 scene.add(dragon.root);
 const fire = new FireBreath(scene);
+const ice = new FireBreath(scene, ICE_BREATH);
 const bursts = new Bursts(scene);
 const mobs = new Mobs(scene, world, bursts);
 if (net) {
@@ -65,6 +68,7 @@ if (net) {
   net.onLeave = (name) => ui.toast(`${name} left`);
   net.onStatus = (ok) => ui.toast(ok ? 'Reconnected' : 'Connection lost. Trying to reconnect…');
 }
+const enemies = new Enemies(scene, world, bursts);
 const vitals = new Vitals();
 vitals.load(saved);
 const player = new Player(world, canvas);
@@ -132,7 +136,7 @@ function refreshHotbar() { ui.refreshHotbar(hot); }
 function selectSlot(i) {
   hot.selected = (i + 9) % 9;
   refreshHotbar();
-  let name = 'Fire breath';
+  let name = 'Fire (left click) / Ice (right click)';
   if (hot.selected >= SLOT.FIRST_BLOCK && hot.selected <= SLOT.LAST_BLOCK) name = BLOCK_NAMES[hot.blocks[hot.selected - 1]];
   else if (hot.selected === SLOT.APPLE) name = 'Apple';
   else if (hot.selected === SLOT.MEAT) name = FOODS.meat.name;
@@ -206,11 +210,31 @@ function placeBlock(hit) {
   if (world.setBlock(px, py, pz, id)) bursts.burst(px + 0.5, py + 0.5, pz + 0.5, DEFS[id].top, 5, 2.5, 0.1, 1);
 }
 
+// ice breath turns the water it hits into ice, and cools lava into rock (a plus-shaped patch, a few times a second)
+let freezeT = 0;
+function freezeBlocks(origin, dir, dt) {
+  freezeT -= dt;
+  if (freezeT > 0) return;
+  freezeT = 0.2;
+  const hit = world.raycast(origin, dir, 24, true);
+  if (!hit) return;
+  const to = hit.id === B.WATER ? B.ICE : hit.id === B.LAVA ? B.BASALT : 0;
+  if (!to) return;
+  for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (world.getBlock(hit.x + dx, hit.y, hit.z + dz) === hit.id) world.setBlock(hit.x + dx, hit.y, hit.z + dz, to);
+  }
+  bursts.burst(hit.x + 0.5, hit.y + 1, hit.z + 0.5, 0xbfe8ff, 4, 2, 0.12, 1);
+}
+
 let breakT = 0, placeT = 0, midWas = false, rightWas = false;
 function handleActions(dt) {
   const slot = hot.selected;
   const blockSlot = slot >= SLOT.FIRST_BLOCK && slot <= SLOT.LAST_BLOCK;
-  player.breathing = player.locked && !vitals.dead && ((slot === SLOT.FIRE && player.buttons.has(0)) || player.keys.has('KeyF'));
+  const fireKey = (slot === SLOT.FIRE && player.buttons.has(0)) || player.keys.has('KeyF');
+  const iceKey = (slot === SLOT.FIRE && player.buttons.has(2)) || player.keys.has('KeyG');
+  const can = player.locked && !vitals.dead;
+  player.breathingIce = can && iceKey && !fireKey;
+  player.breathing = can && (fireKey || iceKey);
 
   let hit = null;
   if (blockSlot && player.locked && !vitals.dead) hit = findTarget();
@@ -252,6 +276,23 @@ function respawn() {
   ui.toast('Back at the village. Be careful of lava!');
 }
 
+function handleVitalEvents(events) {
+  for (const ev of events) {
+    if (ev.type === 'hurt' || ev.type === 'death') ui.flashHurt();
+    if (ev.type === 'death') {
+      player.frozen = true; deathT = 2.6;
+      ui.showDeath(ev.source === 'lava' ? 'You got scorched!' : 'The castle guards got you!', ev.source === 'lava' ? 'Respawning at the village…' : 'Respawning at the village. Try again!');
+    }
+    if (ev.type === 'starve') ui.toast('Your tummy is rumbling. Find some food!');
+  }
+}
+
+const enemyHooks = {
+  hit: (dmg, source) => { if (!vitals.dead) { const ev = vitals.damage(dmg, source); if (ev) handleVitalEvents([ev]); } },
+  drop: (type, x, y, z) => mobs.spawnDrop(type, x, y, z),
+  toast: (t) => ui.toast(t),
+};
+
 function persist() {
   save.saveState({
     pos: [player.pos.x, player.pos.y, player.pos.z], yaw: player.yaw, pitch: player.pitch,
@@ -279,11 +320,7 @@ function frame() {
 
   // vitals
   if (player.locked && player.ready && !vitals.dead) {
-    for (const ev of vitals.tick(dt, { flying: player.flying, boosting: player.boosting, breathing: player.breathing, inLava: player.inLava })) {
-      if (ev.type === 'hurt' || ev.type === 'death') ui.flashHurt();
-      if (ev.type === 'death') { player.frozen = true; deathT = 2.6; ui.showDeath('You got scorched!', 'Respawning at the village…'); }
-      if (ev.type === 'starve') ui.toast('Your tummy is rumbling. Find some food!');
-    }
+    handleVitalEvents(vitals.tick(dt, { flying: player.flying, boosting: player.boosting, breathing: player.breathing, inLava: player.inLava }));
     if (vitals.hunger <= 4 && !hungerWarned) { hungerWarned = true; ui.toast('Getting hungry: roast an animal with fire, or press 8 for an apple'); }
     if (vitals.hunger > 8) hungerWarned = false;
   }
@@ -327,13 +364,23 @@ function frame() {
     else tmpV.copy(camera.position).addScaledVector(dir, 60);
     aim.copy(tmpV).sub(mouth).normalize();
     vel.copy(player.vel).multiplyScalar(0.6);
-    fire.emit(mouth, aim, vel, dt);
-    mobs.burnCone(mouth, aim, dt);
+    if (player.breathingIce) {
+      ice.emit(mouth, aim, vel, dt);
+      mobs.freezeCone(mouth, aim, dt);
+      enemies.freezeCone(mouth, aim, dt);
+      freezeBlocks(mouth, aim, dt);
+    } else {
+      fire.emit(mouth, aim, vel, dt);
+      mobs.burnCone(mouth, aim, dt);
+      enemies.burnCone(mouth, aim, dt);
+    }
   }
   if (net) net.sendState(dt, player, { yaw: relYaw, pitch: lookPitch }, aim);
-  const othersBreathing = net ? net.update(dt, fire, mouth) : false;
-  fire.update(dt, player.breathing || othersBreathing);
+  const others = net ? net.update(dt, { fire, ice }, mouth) : { fire: false, ice: false };
+  fire.update(dt, (player.breathing && !player.breathingIce) || others.fire);
+  ice.update(dt, player.breathingIce || others.ice);
   bursts.update(dt);
+  if (player.ready) enemies.update(dt, { pos: player.pos, vel: player.vel, dead: vitals.dead }, enemyHooks);
   if (player.ready) mobs.update(dt, player, (type) => {
     hot.food[type]++;
     ui.toast(`Picked up ${FOODS[type].name}`);
@@ -362,4 +409,4 @@ function frame() {
 frame();
 
 // handy for tests and future features
-window.__game = { net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE } };
+window.__game = { ice, enemies, net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE, CASTLE } };

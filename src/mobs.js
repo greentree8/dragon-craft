@@ -165,7 +165,24 @@ export class Mobs {
     }
   }
 
+  // ice breath: slows to a stop, tints blue and chills (a little damage)
+  freezeCone(origin, dir, dt, range = 15) {
+    for (const m of [...this.list]) {
+      const v = this._v.copy(m.pos).sub(origin);
+      const d = v.length();
+      if (d > range || d < 0.01) continue;
+      const ang = Math.acos(THREE.MathUtils.clamp(v.dot(dir) / d, -1, 1));
+      if (ang > 0.25 + 0.9 / Math.max(d, 1.5)) continue;
+      const hit = this.world.raycast(origin, v.clone().normalize(), d);
+      if (hit && hit.t < d - 1.2) continue;
+      m.freeze = 3;
+      m.hp -= 1.5 * dt;
+      if (m.hp <= 0) this.kill(m);
+    }
+  }
+
   hurt(m, amount, from) {
+    if (m.freeze > 0) amount *= 2; // frozen things shatter
     m.hp -= amount;
     m.burn = 0.3;
     m.panic = 3;
@@ -186,7 +203,9 @@ export class Mobs {
     if (!w.isLoaded(m.pos.x, m.pos.z)) return;
     m.t -= dt;
     let speed = 0;
-    if (m.panic > 0) {
+    const frozen = (m.freeze = Math.max(0, (m.freeze || 0) - dt)) > 0;
+    if (frozen) { m.panic = 0; m.walking = false; }
+    else if (m.panic > 0) {
       m.panic -= dt;
       speed = m.spec.speed * 3;
     } else if (m.t <= 0) {
@@ -194,7 +213,7 @@ export class Mobs {
       m.t = 1 + Math.random() * 3;
       m.heading += (Math.random() - 0.5) * 3;
     }
-    if (m.panic <= 0 && m.walking) speed = m.spec.speed;
+    if (m.panic <= 0 && m.walking && !frozen) speed = m.spec.speed;
 
     // turn toward heading
     const d = Math.atan2(Math.sin(m.heading - m.yaw), Math.cos(m.heading - m.yaw));
@@ -227,7 +246,8 @@ export class Mobs {
       m.burn -= dt;
       const glow = 0.5 + 0.5 * Math.sin(performance.now() / 40);
       for (const mat of m.mats.values()) mat.emissive.setRGB(0.9 * glow, 0.35 * glow, 0.05);
-    } else for (const mat of m.mats.values()) mat.emissive.setRGB(0, 0, 0);
+    } else if (frozen) for (const mat of m.mats.values()) mat.emissive.setRGB(0.12, 0.3, 0.55);
+    else for (const mat of m.mats.values()) mat.emissive.setRGB(0, 0, 0);
   }
 
   // ---- drops ----
