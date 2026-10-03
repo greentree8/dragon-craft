@@ -3,13 +3,16 @@ import * as THREE from 'three';
 import { B } from './blocks.js';
 import { HEIGHT } from './worldgen.js';
 import { moveBox, boxCollides } from './physics.js';
+import { softGeometry } from './soft.js';
 
 const MAX_MOBS = 22;
 
 // Each builder returns { group, legs, head } with the model's feet at y = 0, facing -Z.
 function builder(mat) {
   const part = (parent, w, h, d, color, x, y, z) => {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+    // thin patches (cow spots) stay flat; everything else is a rounded blob
+    const geo = Math.min(w, h, d) < 0.05 ? new THREE.BoxGeometry(w, h, d) : softGeometry(w, h, d, 0.78);
+    const m = new THREE.Mesh(geo, mat(color));
     m.position.set(x, y, z);
     m.castShadow = true;
     parent.add(m);
@@ -18,7 +21,7 @@ function builder(mat) {
   const leg = (parent, w, h, color, x, z) => {
     const g = new THREE.Group();
     g.position.set(x, h, z);
-    part(g, w, h, w, color, 0, -h / 2, 0);
+    part(g, w, h + 0.16, w, color, 0, -h / 2 + 0.08, 0); // reaches up into the body
     parent.add(g);
     return g;
   };
@@ -95,7 +98,7 @@ export class Mobs {
     this.drops = [];
     this.spawnT = 0;
     this._v = new THREE.Vector3();
-    this.dropGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+    this.dropGeo = new THREE.SphereGeometry(0.24, 14, 10);
     this.dropMats = {
       apple: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xe0353b).multiplyScalar(1.3) }),
       meat: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xc86a2a).multiplyScalar(1.5) }),

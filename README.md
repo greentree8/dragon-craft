@@ -24,13 +24,18 @@ Handy URL options: `?q=low` (faster on slow computers), `?rd=5` (view distance i
 | W A S D, mouse | fly / walk, steer |
 | Space / C / Shift | rise (and take off) / descend / boost |
 | 1 | fire breath (hold click, or hold F) |
-| 2-7 | blocks: left-click breaks, right-click places, middle-click copies |
+| 2-7 | blocks (Stone Bricks stay cubic for building; dirt, stone, sand and grass are sculpted smooth): left-click breaks, right-click places, middle-click copies |
 | E | choose which blocks are in your hotbar |
 | 8 / 9 | apple / fire-roasted meat: right-click or R to eat |
 | Wheel | change hotbar slot |
 | V, - and = | first person, camera distance |
 | T, P, F3 | skip time, pause time, debug |
 | Esc | menu: dragon customizer, feedback, controls |
+
+## Look
+
+Terrain and leaves are drawn as smooth rounded surfaces (`src/smooth.js`), trunks as round logs, and the dragon
+and animals from rounded parts. Collisions and building still use blocks underneath.
 
 ## Survival, gently
 

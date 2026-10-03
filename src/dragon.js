@@ -1,6 +1,7 @@
-// The dragon: a blocky procedural model with animated wings, tail, neck and legs, shaped by a "look".
+// The dragon: a procedural model of rounded, smooth-shaded parts with animated wings, tail, neck and legs, shaped by a "look".
 // Faces -Z. `root` sits at the physics hitbox centre.
 import * as THREE from 'three';
+import { softGeometry } from './soft.js';
 
 export const DEFAULT_LOOK = {
   name: 'Ember',
@@ -34,17 +35,36 @@ const WING_STYLE = {
   round: { scallop: [-0.25, -0.15], len: 0.95 },
 };
 
-function box(w, h, d, mat) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+function box(w, h, d, mat, e = 0.72) {
+  const m = new THREE.Mesh(softGeometry(w, h, d, e), mat);
   m.castShadow = true;
   return m;
 }
 
 function spike(size, mat) {
-  const m = new THREE.Mesh(new THREE.ConeGeometry(size * 0.5, size, 4), mat);
-  m.rotation.y = Math.PI / 4;
+  const m = new THREE.Mesh(new THREE.ConeGeometry(size * 0.4, size, 10), mat);
   m.castShadow = true;
   return m;
+}
+
+// faint overlapping-scale bump pattern
+let scaleBump = null;
+function scaleTexture() {
+  if (scaleBump) return scaleBump;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, 64, 64);
+  for (let row = 0; row < 4; row++) for (let col = -1; col < 4; col++) {
+    const x = col * 16 + (row % 2 ? 8 : 0) + 8, y = row * 16 + 8;
+    const gr = g.createRadialGradient(x, y, 1, x, y, 11);
+    gr.addColorStop(0, '#fff'); gr.addColorStop(1, '#222');
+    g.fillStyle = gr; g.beginPath(); g.arc(x, y, 10, 0, Math.PI * 2); g.fill();
+  }
+  scaleBump = new THREE.CanvasTexture(c);
+  scaleBump.wrapS = scaleBump.wrapT = THREE.RepeatWrapping;
+  scaleBump.repeat.set(5, 3);
+  return scaleBump;
 }
 
 function patternTexture(kind) {
@@ -63,6 +83,7 @@ function patternTexture(kind) {
     }
   }
   const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.magFilter = THREE.NearestFilter;
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -94,10 +115,10 @@ export class Dragon {
     this.walkPhase = 0;
     this.tailSway = 0;
     this.mats = {
-      body: new THREE.MeshStandardMaterial({ roughness: 0.65, flatShading: true }),
-      belly: new THREE.MeshStandardMaterial({ roughness: 0.7, flatShading: true }),
-      accent: new THREE.MeshStandardMaterial({ roughness: 0.5, flatShading: true }),
-      wing: new THREE.MeshStandardMaterial({ roughness: 0.8, side: THREE.DoubleSide, flatShading: true }),
+      body: new THREE.MeshStandardMaterial({ roughness: 0.55, bumpMap: scaleTexture(), bumpScale: 1.2 }),
+      belly: new THREE.MeshStandardMaterial({ roughness: 0.7, bumpMap: scaleTexture(), bumpScale: 0.8 }),
+      accent: new THREE.MeshStandardMaterial({ roughness: 0.4 }),
+      wing: new THREE.MeshStandardMaterial({ roughness: 0.75, side: THREE.DoubleSide }),
       eye: new THREE.MeshBasicMaterial(),
       dark: new THREE.MeshStandardMaterial({ color: 0x1b1b22, roughness: 0.9 }),
       flame: new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 1.1, 0.2) }),
@@ -154,7 +175,7 @@ export class Dragon {
     const pv = this.pivot;
 
     // torso
-    pv.add(box(0.95, 0.8, 1.7, M.body));
+    pv.add(box(0.95, 0.8, 1.9, M.body, 0.8));
     const belly = box(0.8, 0.28, 1.55, M.belly);
     belly.position.set(0, -0.36, 0);
     pv.add(belly);
@@ -168,7 +189,7 @@ export class Dragon {
       const g = new THREE.Group();
       g.position.copy(at);
       parent.add(g);
-      const seg = box(0.55 - i * 0.05, 0.55 - i * 0.05, 0.62, M.body);
+      const seg = box(0.55 - i * 0.05, 0.55 - i * 0.05, 0.9, M.body, 0.6);
       seg.position.z = -0.28;
       g.add(seg);
       this.dorsal(g, 0.24, 0, 0.34 - i * 0.03, -0.28);
@@ -193,13 +214,13 @@ export class Dragon {
     head.add(jaw);
     this.mouthZ = -0.55 - sLen - 0.1;
     for (const s of [-1, 1]) {
-      const eye = box(0.14, 0.14, 0.14, M.eye);
+      const eye = box(0.14, 0.14, 0.14, M.eye, 1);
       eye.position.set(0.3 * s, 0.1, -0.5);
       head.add(eye);
-      const pupil = box(0.06, 0.1, 0.06, M.dark);
+      const pupil = box(0.06, 0.1, 0.06, M.dark, 1);
       pupil.position.set(0.37 * s, 0.1, -0.52);
       head.add(pupil);
-      const nostril = box(0.07, 0.07, 0.07, M.dark);
+      const nostril = box(0.07, 0.07, 0.07, M.dark, 1);
       nostril.position.set(0.12 * s, 0.02, this.mouthZ + 0.05);
       head.add(nostril);
       this.horn(head, s, L.horns);
@@ -215,7 +236,7 @@ export class Dragon {
       g.position.copy(at);
       parent.add(g);
       const t = 1 - i / 8;
-      const seg = box(0.55 * t + 0.1, 0.5 * t + 0.1, 0.6, M.body);
+      const seg = box(0.55 * t + 0.1, 0.5 * t + 0.1, 0.9, M.body, 0.6);
       seg.position.z = 0.28;
       g.add(seg);
       if (i < 6) this.dorsal(g, 0.26 * t + 0.08, 0, 0.3 * t + 0.1, 0.28);
@@ -299,7 +320,7 @@ export class Dragon {
       return;
     }
     const long = kind === 'long';
-    const h = new THREE.Mesh(new THREE.ConeGeometry(long ? 0.13 : 0.11, long ? 1.05 : 0.6, 5), M.accent);
+    const h = new THREE.Mesh(new THREE.ConeGeometry(long ? 0.13 : 0.11, long ? 1.05 : 0.6, 12), M.accent);
     h.position.set(0.24 * s, long ? 0.5 : 0.4, long ? 0.12 : 0);
     h.rotation.x = long ? 1.0 : 0.7;
     h.rotation.z = -0.25 * s;
@@ -321,21 +342,20 @@ export class Dragon {
       }
     } else if (kind === 'flame') {
       for (const [dx, dy, dz, sz] of [[0, 0.05, 0.75, 0.7], [0.12, 0.2, 0.7, 0.45], [-0.12, 0.15, 0.68, 0.5]]) {
-        const f = new THREE.Mesh(new THREE.ConeGeometry(0.17, sz, 5), M.flame);
+        const f = new THREE.Mesh(new THREE.ConeGeometry(0.17, sz, 10), M.flame);
         f.rotation.x = Math.PI / 2;
         f.position.set(dx, dy, dz + sz / 2);
         parent.add(f);
       }
     } else if (kind === 'plain') {
-      const t = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.7, 4), M.body);
-      t.rotation.x = Math.PI / 2; t.rotation.z = Math.PI / 4;
+      const t = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.7, 12), M.body);
+      t.rotation.x = Math.PI / 2;
       t.position.z = 0.8;
       t.castShadow = true;
       parent.add(t);
     } else {
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 4), M.accent);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 12), M.accent);
       tip.rotation.x = Math.PI / 2;
-      tip.rotation.z = Math.PI / 4;
       tip.position.z = 0.9;
       tip.castShadow = true;
       parent.add(tip);

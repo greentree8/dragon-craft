@@ -1,4 +1,4 @@
-// Day/night cycle: sky dome shader (gradient, sun, moon, stars), lights, fog and blocky clouds.
+// Day/night cycle: sky dome shader (gradient, sun, moon, stars), lights, fog and soft clouds.
 import * as THREE from 'three';
 
 const DAY_LENGTH = 600; // seconds for a full day
@@ -89,8 +89,8 @@ export class Sky {
   }
 
   buildClouds() {
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    this.cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.92, fog: false });
+    const geo = new THREE.SphereGeometry(0.5, 14, 9);
+    this.cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.93, fog: false });
     const N = 220;
     this.clouds = new THREE.InstancedMesh(geo, this.cloudMat, N);
     this.clouds.frustumCulled = false;
@@ -101,7 +101,7 @@ export class Sky {
       const cx = (Math.random() - 0.5) * 900, cz = (Math.random() - 0.5) * 900, cy = 150 + Math.random() * 25;
       const parts = 3 + Math.floor(Math.random() * 4);
       for (let k = 0; k < parts && i < N; k++, i++) {
-        const w = 10 + Math.random() * 16, d = 8 + Math.random() * 12, h = 3 + Math.random() * 2;
+        const w = 12 + Math.random() * 18, d = 9 + Math.random() * 13, h = 5 + Math.random() * 4;
         this.cloudData.push({ x: cx + (Math.random() - 0.5) * 22, y: cy + (Math.random() - 0.5) * 2, z: cz + (Math.random() - 0.5) * 16, w, h, d });
       }
     }
@@ -166,6 +166,7 @@ export class Sky {
     // fog matches the horizon so far terrain melts into the sky
     this.scene.fog.color.copy(hor);
     this.cloudMat.color.copy(this._tmp.set(0xffffff).lerp(hor, 0.25 * (1 - day)).multiplyScalar(0.15 + 0.85 * day));
+    this.cloudMat.emissive.copy(this.cloudMat.color).multiplyScalar(0.55);
     this.updateClouds(performance.now() / 1000, center);
     return day;
   }

@@ -3,8 +3,9 @@ import * as THREE from 'three';
 import { B, DEFS } from './blocks.js';
 import { WorldGen, CHUNK, HEIGHT } from './worldgen.js';
 import { hash3 } from './noise.js';
+import { buildSmooth, PAD, P } from './smooth.js';
+import { makeTerrainMaterial } from './material.js';
 
-const P = CHUNK + 2; // padded width
 const key = (cx, cz) => (cx + 32768) * 65536 + (cz + 32768);
 
 // Face table: normal, 4 corner offsets (CCW seen from outside), and the 3 AO sample dirs per corner.
@@ -39,6 +40,53 @@ class MeshBuilder {
     else this.idx.push(o, o + 1, o + 2, o, o + 2, o + 3);
     this.n += 4;
   }
+  // a rounded trunk segment along `axis` filling the voxel; capLo/capHi add end caps
+  log(x, y, z, axis, capLo, capHi, colors, jit, h) {
+    const SIDES = 12, R = 0.47, o = [x + 0.5, y + 0.5, z + 0.5];
+    const u = (axis + 1) % 3, v = (axis + 2) % 3;
+    const push = (p, n, c, k) => {
+      this.pos.push(p[0], p[1], p[2]); this.nor.push(n[0], n[1], n[2]);
+      this.col.push(c.r * k, c.g * k, c.b * k); return this.n++;
+    };
+    const ring = [];
+    for (let i = 0; i < SIDES; i++) {
+      const a = (i / SIDES) * Math.PI * 2, cu = Math.cos(a), cv = Math.sin(a);
+      const streak = 0.82 + 0.3 * h(i, 0); // bark streaks run along the trunk
+      const lo = [0, 0, 0], hi = [0, 0, 0], n = [0, 0, 0];
+      lo[axis] = o[axis] - 0.5; hi[axis] = o[axis] + 0.5;
+      lo[u] = hi[u] = o[u] + cu * R; lo[v] = hi[v] = o[v] + cv * R;
+      n[u] = cu; n[v] = cv;
+      ring.push([push(lo, n, colors.side, jit * streak), push(hi, n, colors.side, jit * streak)]);
+    }
+    const P3 = this.pos, N3 = this.nor;
+    // wind each triangle so it faces the way its vertex normals point
+    const tri = (a, b, c) => {
+      const ax = P3[b * 3] - P3[a * 3], ay = P3[b * 3 + 1] - P3[a * 3 + 1], az = P3[b * 3 + 2] - P3[a * 3 + 2];
+      const bx = P3[c * 3] - P3[a * 3], by = P3[c * 3 + 1] - P3[a * 3 + 1], bz = P3[c * 3 + 2] - P3[a * 3 + 2];
+      const d = (ay * bz - az * by) * (N3[a * 3] + N3[b * 3] + N3[c * 3])
+        + (az * bx - ax * bz) * (N3[a * 3 + 1] + N3[b * 3 + 1] + N3[c * 3 + 1])
+        + (ax * by - ay * bx) * (N3[a * 3 + 2] + N3[b * 3 + 2] + N3[c * 3 + 2]);
+      if (d < 0) this.idx.push(a, c, b); else this.idx.push(a, b, c);
+    };
+    for (let i = 0; i < SIDES; i++) {
+      const [l0, h0] = ring[i], [l1, h1] = ring[(i + 1) % SIDES];
+      tri(l0, l1, h1); tri(l0, h1, h0);
+    }
+    const cap = (at, sign) => {
+      const n = [0, 0, 0]; n[axis] = sign;
+      const p = [0, 0, 0]; p[axis] = at; p[u] = o[u]; p[v] = o[v];
+      const c = push(p, n, colors.top, jit);
+      const rim = [];
+      for (let i = 0; i < SIDES; i++) {
+        const a = (i / SIDES) * Math.PI * 2, q = [0, 0, 0];
+        q[axis] = at; q[u] = o[u] + Math.cos(a) * R; q[v] = o[v] + Math.sin(a) * R;
+        rim.push(push(q, n, colors.top, jit * 0.92));
+      }
+      for (let i = 0; i < SIDES; i++) tri(c, rim[i], rim[(i + 1) % SIDES]);
+    };
+    if (capHi) cap(o[axis] + 0.5, 1);
+    if (capLo) cap(o[axis] - 0.5, -1);
+  }
   build() {
     if (!this.n) return null;
     const g = new THREE.BufferGeometry();
@@ -61,7 +109,8 @@ export class World {
     this.group = new THREE.Group();
     scene.add(this.group);
 
-    this.matOpaque = new THREE.MeshLambertMaterial({ vertexColors: true });
+    this.matOpaque = makeTerrainMaterial({ roughness: 0.92, detail: 0.9 });
+    this.matSmooth = makeTerrainMaterial({ roughness: 0.95, detail: 1.25 });
     this.matGlow = new THREE.MeshBasicMaterial({ vertexColors: true });
     this.matWater = new THREE.MeshPhongMaterial({
       vertexColors: true, transparent: true, opacity: 0.82, shininess: 90,
@@ -100,10 +149,12 @@ export class World {
     c.data[idx] = id;
     if (this.save) this.save.recordEdit(cx, cz, idx, id);
     const touched = [c];
-    if (lx === 0) touched.push(this.chunks.get(key(cx - 1, cz)));
-    if (lx === CHUNK - 1) touched.push(this.chunks.get(key(cx + 1, cz)));
-    if (lz === 0) touched.push(this.chunks.get(key(cx, cz - 1)));
-    if (lz === CHUNK - 1) touched.push(this.chunks.get(key(cx, cz + 1)));
+    const dxs = [0], dzs = [0];
+    if (lx < PAD) dxs.push(-1);
+    if (lx >= CHUNK - PAD) dxs.push(1);
+    if (lz < PAD) dzs.push(-1);
+    if (lz >= CHUNK - PAD) dzs.push(1);
+    for (const dx of dxs) for (const dz of dzs) if (dx || dz) touched.push(this.chunks.get(key(cx + dx, cz + dz)));
     for (const t of touched) {
       if (!t || !t.data) continue;
       if (t.meshed && this.neighboursReady(t.cx, t.cz)) this.meshChunk(t);
@@ -133,7 +184,7 @@ export class World {
     this.unloadFar();
     // only chunks near the sun-shadow frustum cast shadows
     for (const c of this.chunks.values()) {
-      if (!c.mesh) continue;
+      if (!c.meshes.length) continue;
       const dx = (c.cx + 0.5) * CHUNK - px, dz = (c.cz + 0.5) * CHUNK - pz;
       const near = dx * dx + dz * dz < this.shadowRange * this.shadowRange;
       for (const m of c.meshes) m.castShadow = near && m !== c.water;
@@ -201,21 +252,18 @@ export class World {
   // ---- meshing ----
   meshChunk(c) {
     const { cx, cz } = c;
-    // padded copy so neighbour/AO lookups are cheap
+    // padded copy so neighbour/AO/smoothing lookups are cheap
     const pad = new Uint8Array(P * HEIGHT * P);
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-      const nc = this.chunks.get(key(cx + dx, cz + dz));
-      const d = nc.data;
-      const x0 = dx === -1 ? CHUNK - 1 : dx === 1 ? 0 : 0;
-      const x1 = dx === -1 ? CHUNK - 1 : dx === 1 ? 0 : CHUNK - 1;
-      const z0 = dz === -1 ? CHUNK - 1 : dz === 1 ? 0 : 0;
-      const z1 = dz === -1 ? CHUNK - 1 : dz === 1 ? 0 : CHUNK - 1;
-      for (let y = 0; y < HEIGHT; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) {
-        pad[((z + dz * CHUNK + 1) * HEIGHT + y) * P + (x + dx * CHUNK + 1)] = d[(y * CHUNK + z) * CHUNK + x];
-      }
+    for (let pz = -PAD; pz < CHUNK + PAD; pz++) for (let px = -PAD; px < CHUNK + PAD; px++) {
+      const ncx = Math.floor(px / CHUNK), ncz = Math.floor(pz / CHUNK);
+      const d = this.chunks.get(key(cx + ncx, cz + ncz)).data;
+      const lx = px - ncx * CHUNK, lz = pz - ncz * CHUNK;
+      for (let y = 0; y < HEIGHT; y++) pad[((pz + PAD) * HEIGHT + y) * P + (px + PAD)] = d[(y * CHUNK + lz) * CHUNK + lx];
     }
-    const at = (x, y, z) => (y < 0 || y >= HEIGHT ? 0 : pad[((z + 1) * HEIGHT + y) * P + (x + 1)]);
+    const at = (x, y, z) => (y < 0 || y >= HEIGHT ? 0 : pad[((z + PAD) * HEIGHT + y) * P + (x + PAD)]);
     const opaqueAt = (x, y, z) => { const b = at(x, y, z); return DEFS[b].opaque && !DEFS[b].emissive ? 1 : 0; };
+    // smooth and round blocks don't fill their voxel, so they never hide a neighbour's face
+    const hides = (d) => d.opaque && !d.emissive && !d.smooth && !d.round;
 
     const solid = new MeshBuilder(), glow = new MeshBuilder(), water = new MeshBuilder();
     const colors = [{ r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }, { r: 0, g: 0, b: 0 }];
@@ -236,6 +284,17 @@ export class World {
           const id = at(x, y, z);
           if (id === 0) continue;
           const def = DEFS[id];
+          if (def.smooth) continue;
+          if (def.round) {
+            const wx = cx * CHUNK + x, wz = cz * CHUNK + z;
+            const same = (dx, dy, dz) => at(x + dx, y + dy, z + dz) === id;
+            let axis = 1;
+            if (!same(0, 1, 0) && !same(0, -1, 0)) { if (same(1, 0, 0) || same(-1, 0, 0)) axis = 0; else if (same(0, 0, 1) || same(0, 0, -1)) axis = 2; }
+            const dir = [0, 0, 0]; dir[axis] = 1;
+            const jit = 1 + (hash3(wx, y, wz, 5) - 0.5) * 2 * def.jitter;
+            solid.log(x, y, z, axis, !same(-dir[0], -dir[1], -dir[2]), !same(dir[0], dir[1], dir[2]), COLORS[id], jit, hash3.bind(null, wx, wz));
+            continue;
+          }
           const wx = cx * CHUNK + x, wz = cz * CHUNK + z;
           const jit = 1 + (hash3(wx, y, wz, 5) - 0.5) * 2 * def.jitter;
           const isWater = id === B.WATER;
@@ -246,9 +305,9 @@ export class World {
             const nd = DEFS[nb];
             // visibility
             if (isWater) { if (nb !== 0) continue; }
-            else if (id === B.LAVA) { if (nb === B.LAVA || (nd.opaque && !nd.emissive)) continue; }
-            else if (isGlow) { if (nb === id || (nd.opaque && !nd.emissive)) continue; }
-            else if (nd.opaque && !nd.emissive) continue;
+            else if (id === B.LAVA) { if (nb === B.LAVA || hides(nd)) continue; }
+            else if (isGlow) { if (nb === id || hides(nd)) continue; }
+            else if (hides(nd)) continue;
 
             const base = COLORS[id];
             const faceCol = f.shade === 'top' ? base.top : f.shade === 'bottom' ? base.bottom : base.side;
@@ -310,6 +369,16 @@ export class World {
       return m;
     };
     c.mesh = mk(solid, this.matOpaque, 0);
+    const sg = buildSmooth(pad, maxY, cx * CHUNK, cz * CHUNK);
+    if (sg) {
+      const m = new THREE.Mesh(sg, this.matSmooth);
+      m.position.set(cx * CHUNK, 0, cz * CHUNK);
+      m.receiveShadow = true;
+      m.matrixAutoUpdate = false;
+      m.updateMatrix();
+      this.group.add(m);
+      c.meshes.push(m);
+    }
     mk(glow, this.matGlow, 0);
     c.water = mk(water, this.matWater, 2);
     c.meshed = true;
