@@ -121,3 +121,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 1px; b
 #abilities .ab kbd { position: absolute; left: 4px; top: 2px; font: 700 11px system-ui, sans-serif; background: none; border: none; padding: 0; opacity: .9; }
 #abilities .ab .cd { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.62); height: 0; }
 #abilities .ab.ready { border-color: #ffe27a; box-shadow: 0 0 10px rgba(255,226,122,.45); }
+
+/* guard disguise timer */
+#disguise { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); background: rgba(8,14,28,.72); padding: 5px 14px; border-radius: 16px; font: 700 14px system-ui, sans-serif; text-shadow: 0 1px 3px #000; white-space: nowrap; }
+#disguise.hidden { display: none; }

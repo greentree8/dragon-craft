@@ -23,4 +23,4 @@ export function swatchCss(id) {
   const d = DEFS[id];
   return `linear-gradient(135deg, ${hex(d.top)} 0 45%, ${hex(d.side)} 45% 100%)`;
 }
-export function canBreak(id, y) { return id !== 0 && y > 1 && !DEFS[id].liquid; }
+export function canBreak(id, y) { return id !== 0 && y > 1 && !DEFS[id].liquid && id !== B.CHEST; }

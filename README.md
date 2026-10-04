@@ -55,6 +55,9 @@ Three castles stand far from spawn: about x 136 z 72 (east), x -24 z 324 (south)
 Each has a **Dread Drake**, a big enemy dragon that perches on the keep, circles you, hurls fireballs, dives to bite, and breathes fire or frost when it is badly hurt. Fire does a little less damage to its scales; lightning, fireballs and the roar go straight through, and ice slows it. If you flee it heals.
 Knights chase you on the ground, archers shoot arrows from the walls and towers, and the Castle Lord guards the keep.
 Fire burns them; ice freezes them in place (frozen guards take double fire damage). Defeat the Castle Lord for loot.
+**Guard disguise (H):** for 5 minutes you look like a castle knight and the guards and Drake leave you alone. Attacking (breath, lightning, fireball, roar) gives you away, and you wait 90 seconds before you can disguise again.
+Sneak into the keep and find the **hidden treasure chests** (4 per castle, two downstairs and two upstairs, glowing gold-brown). Fly up to one and it opens for 50 fire-roasted meat; it refills 10 minutes later.
+
 Ice also turns water into ice blocks and cools lava into rock. The guards come back a few minutes after you clear the castle.
 
 ## Survival, gently

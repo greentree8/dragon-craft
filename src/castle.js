@@ -11,7 +11,10 @@ export const CASTLES = [
 export const CASTLE = CASTLES[0];
 const REACH = 19;
 
-const { AIR, STONE_BRICK: SB, COBBLE, PLANKS, LANTERN, GOLD, LOG } = B;
+const { AIR, STONE_BRICK: SB, COBBLE, PLANKS, LANTERN, GOLD, LOG, CHEST } = B;
+
+// treasure chests hidden in the keep: [dx, dy, dz] (two on the ground floor, two upstairs)
+export const CHEST_OFFSETS = [[-4, 1, 3], [4, 1, -3], [-4, 9, -3], [4, 9, 3]];
 
 // returns undefined outside the castle's footprint (terrain is left alone)
 export function castleBlock(dx, dy, dz) {
@@ -45,6 +48,7 @@ export function castleBlock(dx, dy, dz) {
       return SB;
     }
     // inside
+    for (const [cx, cy, cz] of CHEST_OFFSETS) if (dx === cx && dy === cy && dz === cz) return CHEST;
     if (dy === 8) return ax <= 1 && az <= 1 ? AIR : PLANKS;
     if (dy === 7 && ((ax === 3 && az === 3) || (ax === 0 && az === 0))) return LANTERN;
     if (dy === 1 && dz === -3 && ax <= 2) return GOLD; // treasure

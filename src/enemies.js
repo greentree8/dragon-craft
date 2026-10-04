@@ -15,7 +15,7 @@ const SPEC = {
 const ARROW_SPEED = 28, ARROW_GRAVITY = 9, MAX_ARROWS = 24, SPAWN_RANGE = 115, DESPAWN_RANGE = 190;
 
 // A person built from rounded parts, feet at y = 0, facing -Z.
-function humanoid(type) {
+export function humanoid(type) {
   const boss = type === 'boss', archer = type === 'archer';
   const mats = new Map();
   const mat = (c, glow = 0) => {
@@ -211,6 +211,7 @@ export class Enemies {
   step(m, dt, player, hooks) {
     const w = this.world;
     if (!w.isLoaded(m.pos.x, m.pos.z)) return;
+    const hidden = player.dead || player.disguised; // a disguised player is just another guard
     const tx = player.pos.x - m.pos.x, tz = player.pos.z - m.pos.z, ty = player.pos.y - m.pos.y;
     const dist2d = Math.hypot(tx, tz), dist = Math.hypot(dist2d, ty);
     m.freeze = Math.max(0, m.freeze - dt);
@@ -222,7 +223,7 @@ export class Enemies {
 
     if (frozen) { /* stuck in ice */ }
     else if (m.type === 'archer') {
-      m.aggro = !player.dead && dist < m.spec.sight && this.lineOfSight(eye, player.pos);
+      m.aggro = !hidden && dist < m.spec.sight && this.lineOfSight(eye, player.pos);
       if (m.aggro) {
         face = [tx, tz];
         m.arms[0].rotation.x = -1.3 + Math.sin(performance.now() / 300) * 0.03;
@@ -231,8 +232,8 @@ export class Enemies {
     } else {
       const fromHome = m.home.distanceTo(m.pos);
       const reachable = Math.abs(ty) < 7 || player.pos.y < m.pos.y + 3;
-      if (!player.dead && dist2d < m.spec.sight && fromHome < 40 && reachable) m.aggro = true;
-      else if (dist2d > m.spec.sight * 1.6 || fromHome > 44 || player.dead) m.aggro = false;
+      if (!hidden && dist2d < m.spec.sight && fromHome < 40 && reachable) m.aggro = true;
+      else if (dist2d > m.spec.sight * 1.6 || fromHome > 44 || hidden) m.aggro = false;
       if (m.aggro && dist2d > 1.5) { face = [tx, tz]; speed = m.spec.speed; }
       else if (m.aggro) face = [tx, tz];
       else if (fromHome > 2.5) { face = [m.home.x - m.pos.x, m.home.z - m.pos.z]; speed = m.spec.speed * 0.6; }

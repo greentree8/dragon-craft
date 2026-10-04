@@ -249,6 +249,13 @@ export class UI {
     });
   }
 
+  setDisguise(text) {
+    const el = $('disguise');
+    if (text === null) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    if (el.textContent !== text) el.textContent = text;
+  }
+
   // boss health bar; pass null to hide it
   setBoss(info) {
     const el = $('bossbar');

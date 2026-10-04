@@ -90,8 +90,8 @@ export class Drake {
 
     if (this.state === 'perch') {
       this.pos.lerp(this.perch, 1 - Math.exp(-3 * dt)); this.vel.set(0, 0, 0);
-      if (!player.dead && castleDist < 80) { this.setState('circle', 2); hooks.toast('The Dread Drake awakens!'); }
-    } else if (player.dead || castleDist > 150) {
+      if (!player.dead && !player.disguised && castleDist < 80) { this.setState('circle', 2); hooks.toast('The Dread Drake awakens!'); }
+    } else if (player.dead || player.disguised || castleDist > 150) {
       if (this.state !== 'return') this.setState('return');
     }
 

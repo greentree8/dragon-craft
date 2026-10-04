@@ -12,6 +12,8 @@ import { Bursts } from './effects.js';
 import { Mobs } from './mobs.js';
 import { Enemies } from './enemies.js';
 import { Abilities, ABILITIES } from './abilities.js';
+import { Disguise } from './disguise.js';
+import { Chests, CHEST_MEAT } from './chests.js';
 import { Vitals } from './stats.js';
 import { Save } from './save.js';
 import { UI } from './ui.js';
@@ -71,6 +73,7 @@ if (net) {
   net.onStatus = (ok) => ui.toast(ok ? 'Reconnected' : 'Connection lost. Trying to reconnect…');
 }
 const enemies = new Enemies(scene, world, bursts);
+const disguise = new Disguise(scene, dragon, (why) => ui.toast(why === 'attacked' ? 'The guards saw through your disguise!' : why));
 const abilities = new Abilities({ scene, world, bursts, mobs, enemies, canBreak, B });
 const vitals = new Vitals();
 vitals.load(saved);
@@ -122,7 +125,12 @@ const ui = new UI({
 });
 const radar = new Radar(document.getElementById('hud'));
 ui.buildHotbar(hot);
-ui.buildAbilities(ABILITIES);
+ui.buildAbilities([...ABILITIES, { key: 'H', icon: '🛡', name: 'Guard disguise (5 min)' }]);
+const chests = new Chests(world, WORLD, {
+  give: (n) => { hot.food.meat += n; refreshHotbar(); },
+  toast: (t) => ui.toast(t),
+  burst: (x, y, z) => { bursts.burst(x, y, z, 0xffd23f, 24, 5, 0.18, 3); bursts.burst(x, y, z, 0xc86a2a, 10, 3, 0.2, 2); },
+});
 ui.setVitals(vitals.health, vitals.hunger);
 ui.showMenu(savedLook ? 'play' : 'dragon');
 
@@ -187,10 +195,19 @@ function aimFromCrosshair() {
   aim.copy(tmpV).sub(mouth).normalize();
 }
 
+function toggleDisguise() {
+  if (disguise.active) { disguise.stop('You took off the disguise.'); return; }
+  if (disguise.start()) ui.toast('Disguised as a castle guard! The guards will leave you alone. Do not attack.');
+  else ui.toast(`You can disguise again in ${Math.ceil(disguise.cd)}s`);
+}
+
 function useAbility(id) {
   if (vitals.dead || !player.ready) return;
   aimFromCrosshair();
-  if (abilities.use(id, mouth, aim, player)) vitals.spend(ABILITIES.find((a) => a.id === id).cost);
+  if (abilities.use(id, mouth, aim, player)) {
+    disguise.stop('attacked');
+    vitals.spend(ABILITIES.find((a) => a.id === id).cost);
+  }
 }
 
 addEventListener('keydown', (e) => {
@@ -204,6 +221,7 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'KeyZ') useAbility('lightning');
   else if (e.code === 'KeyX') useAbility('fireball');
   else if (e.code === 'KeyB') useAbility('roar');
+  else if (e.code === 'KeyH') toggleDisguise();
   else if (e.code === 'KeyT' && !net) sky.time = (sky.time + 0.08) % 1;
   else if (e.code === 'KeyP' && !net) sky.paused = !sky.paused;
   else if (e.code === 'Minus') player.camDist = Math.min(16, player.camDist + 1);
@@ -407,8 +425,12 @@ function frame() {
   ice.update(dt, player.breathingIce || others.ice || enemies.drakes.some((d) => d.state === 'breath' && d.frost));
   bursts.update(dt);
   abilities.update(dt);
-  ui.setCooldowns(abilities.fractions());
-  if (player.ready) enemies.update(dt, { pos: player.pos, vel: player.vel, dead: vitals.dead }, enemyHooks);
+  if (player.breathing && disguise.active) disguise.stop('attacked');
+  disguise.update(dt, player);
+  chests.update(dt, player);
+  ui.setCooldowns([...abilities.fractions(), disguise.fraction()]);
+  ui.setDisguise(disguise.active ? `🛡 Disguised as a guard ${disguise.timeText()} · H to take off` : null);
+  if (player.ready) enemies.update(dt, { pos: player.pos, vel: player.vel, dead: vitals.dead, disguised: disguise.active }, enemyHooks);
   ui.setBoss(enemies.bossInfo());
   if (player.ready) mobs.update(dt, player, (type) => {
     hot.food[type]++;
@@ -442,4 +464,4 @@ function frame() {
 frame();
 
 // handy for tests and future features
-window.__game = { abilities, composer, ice, enemies, net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE, CASTLE, CASTLES } };
+window.__game = { disguise, chests, abilities, composer, ice, enemies, net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE, CASTLE, CASTLES } };
