@@ -5,6 +5,7 @@ import { WebSocketServer } from 'ws';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WorldGen } from '../src/worldgen.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
@@ -43,6 +44,7 @@ class Room {
     this.count = 0;
     this.players = new Map();
     this.dirty = false;
+    this.gen = null; // world generator for this room's seed, used to refuse edits inside castles
     this.started = Date.now();
     this.nextId = 1;
     this.load();
@@ -74,6 +76,8 @@ class Room {
   time() { return (((Date.now() - this.started) / 1000 / DAY_LENGTH) + 0.1) % 1; }
 
   applyEdit(cx, cz, idx, id) {
+    this.gen ??= new WorldGen(this.seed);
+    if (this.gen.isProtected(cx * 16 + (idx % 16), Math.floor(idx / 256), cz * 16 + (Math.floor(idx / 16) % 16))) return false;
     const k = `${cx},${cz}`;
     let m = this.edits.get(k);
     if (!m) { m = new Map(); this.edits.set(k, m); }

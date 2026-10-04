@@ -207,6 +207,18 @@ export class WorldGen {
     return v;
   }
 
+  // Castles, mazes and the Grand Citadel can't be changed: no breaking, no explosions, no building inside them.
+  isProtected(x, y, z) {
+    for (const c of CASTLES) {
+      if (Math.abs(x - c.x) <= c.reach && Math.abs(z - c.z) <= c.reach) { const b = this.castleBase(c); return y >= b - 1 && y <= b + 28; }
+    }
+    for (const m of MAZES) {
+      if (Math.abs(x - m.x) <= m.HALF && Math.abs(z - m.z) <= m.HALF) { const b = this.mazeBase(m); return y >= b - 1 && y <= b + 9; }
+    }
+    if (Math.abs(x - CITADEL.x) <= CITADEL.HALF && Math.abs(z - CITADEL.z) <= CITADEL.HALF) { const b = this.citadelBase(); return y >= b - 1 && y <= b + CITADEL.height + 1; }
+    return false;
+  }
+
   nearCitadel(x, z, pad = 0) {
     return Math.abs(x - CITADEL.x) <= CITADEL.reach + pad && Math.abs(z - CITADEL.z) <= CITADEL.reach + pad;
   }

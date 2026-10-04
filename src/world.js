@@ -143,6 +143,7 @@ export class World {
   // record=false is used when applying edits that came from other players
   setBlock(x, y, z, id, record = true) {
     if (y < 0 || y >= HEIGHT) return false;
+    if (this.gen.isProtected(x, y, z)) return false; // castles, mazes and the citadel are indestructible
     const cx = Math.floor(x / CHUNK), cz = Math.floor(z / CHUNK);
     const c = this.chunks.get(key(cx, cz));
     if (!c || !c.data) return false;
@@ -256,7 +257,13 @@ export class World {
   generateChunk(cx, cz) {
     const data = this.gen.generate(cx, cz);
     const edits = this.save && this.save.getEdits(cx, cz);
-    if (edits) for (const [i, id] of edits) data[i] = id;
+    if (edits) {
+      for (const [i, id] of edits) {
+        // old edits made inside a castle (before it became indestructible) are ignored
+        if (this.gen.isProtected(cx * CHUNK + (i % CHUNK), Math.floor(i / (CHUNK * CHUNK)), cz * CHUNK + (Math.floor(i / CHUNK) % CHUNK))) continue;
+        data[i] = id;
+      }
+    }
     this.chunks.set(key(cx, cz), { cx, cz, data, meshed: false, dirty: true, meshes: [], mesh: null, water: null });
   }
 

@@ -352,7 +352,11 @@ function findTarget() {
   return world.raycast(_org, _dir, 14);
 }
 
+let protectedToastT = 0;
+function protectedHint() { if (performance.now() - protectedToastT > 3000) { protectedToastT = performance.now(); ui.toast('This castle is magic. Nothing can break it!'); } }
+
 function breakBlock(hit) {
+  if (world.gen.isProtected(hit.x, hit.y, hit.z)) { protectedHint(); return; }
   if (!canBreak(hit.id, hit.y)) return;
   if (!world.setBlock(hit.x, hit.y, hit.z, B.AIR)) return;
   bursts.burst(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5, DEFS[hit.id].top, 12, 4, 0.16, 2);
@@ -362,6 +366,7 @@ function breakBlock(hit) {
 function placeBlock(hit) {
   const px = hit.x + hit.normal.x, py = hit.y + hit.normal.y, pz = hit.z + hit.normal.z;
   if (py < 2 || py >= HEIGHT - 1) return;
+  if (world.gen.isProtected(px, py, pz)) { protectedHint(); return; }
   const cur = world.getBlock(px, py, pz);
   if (cur !== B.AIR && !DEFS[cur].liquid) return;
   // don't trap the dragon inside the new block

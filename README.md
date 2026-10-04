@@ -47,6 +47,10 @@ see [deploy/README.md](deploy/README.md).
 Terrain and leaves are drawn as smooth rounded surfaces (`src/smooth.js`), trunks as round logs, and the dragon
 and animals from rounded parts. Collisions and building still use blocks underneath.
 
+## Indestructible castles
+
+The castles, both mazes and the Grand Citadel are magic: you can't break them, explode them or build inside them (the game and the server both refuse). Everything else in the world can still be changed.
+
 ## Growing up
 
 You start as a **baby dragon** and pick one of four **elements**: 🔥 Fire, ❄ Ice, ⚡ Lightning or ⛰ Earth.
