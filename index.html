@@ -36,6 +36,11 @@
     </section>
 
     <section id="tab-dragon" hidden>
+      <div id="element-box">
+        <h3>Pick your element</h3>
+        <div id="elements" class="elements"></div>
+        <p id="element-hint" class="small"></p>
+      </div>
       <label class="row"><span>Name</span><input id="dragon-name" maxlength="14" autocomplete="off" spellcheck="false"></label>
       <div class="row"><span>Colors</span><div id="presets" class="presets"></div><button id="randomize" class="chip" title="Surprise me">🎲 Random</button></div>
       <div id="colors" class="colors"></div>
@@ -61,14 +66,14 @@
       <div class="controls">
         <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly / walk &nbsp; <kbd>Mouse</kbd> steer</div>
         <div><kbd>Space</kbd> take off / rise &nbsp; <kbd>C</kbd> descend &nbsp; <kbd>Shift</kbd> boost</div>
-        <div><kbd>1</kbd> 🔥 fire breath: hold <kbd>Left-click</kbd> or <kbd>F</kbd></div>
+        <div><kbd>1</kbd> your element's breath: hold <kbd>Left-click</kbd> or <kbd>F</kbd></div>
+        <div><kbd>Z</kbd> <kbd>X</kbd> <kbd>B</kbd> your element's other attacks. You get them as you grow: Z as a kid, X as a teenager, B as an adult</div>
+        <div>🥚 You start as a baby dragon. Find the 50 hidden chests in the Grand Citadel to grow: 10 for a kid, 25 for a teenager, 50 for an adult</div>
         <div><kbd>M</kbd> 🗺 world map: the maze, castles, village and your friends</div>
         <div><kbd>J</kbd> fly to the nearest other player (multiplayer)</div>
         <div>🍎 The giant maze (see the radar) hides a Golden Apple: 10 minutes of invincibility. Watch out for traps!</div>
         <div><kbd>H</kbd> 🛡 guard disguise for 5 minutes: the castle guards ignore you (attacking gives you away). Hidden chests inside the keeps hold 50 meat each.</div>
         <div><kbd>K</kbd> 💀 Annihilate: kills everything nearby (unlock it with the Master Apple in the Volcano Maze; 2 minute cooldown)</div>
-        <div><kbd>Z</kbd> ⚡ lightning &nbsp; <kbd>X</kbd> ☄ explosive fireball &nbsp; <kbd>B</kbd> 📣 roar shockwave</div>
-        <div>&nbsp;&nbsp;&nbsp;&nbsp;❄ <b>ice breath</b>: hold <kbd>Right-click</kbd> or <kbd>G</kbd> (freezes enemies, turns water to ice, cools lava)</div>
         <div><kbd>2</kbd>–<kbd>7</kbd> blocks: <kbd>Left-click</kbd> break, <kbd>Right-click</kbd> place</div>
         <div><kbd>E</kbd> choose blocks &nbsp; <kbd>Middle-click</kbd> copy a block</div>
         <div><kbd>8</kbd> apple, <kbd>9</kbd> meat: <kbd>Right-click</kbd> or <kbd>R</kbd> to eat</div>
@@ -94,6 +99,7 @@
 <div id="hud" class="hidden">
   <div id="crosshair"></div>
   <div id="clock"></div>
+  <div id="growth"></div>
   <div id="disguise" class="hidden"></div>
   <div id="invincible" class="hidden"></div>
   <div id="bossbar" class="hidden"><div id="bossname"></div><div class="bosstrack"><i id="bossfill"></i></div></div>

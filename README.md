@@ -30,9 +30,10 @@ see [deploy/README.md](deploy/README.md).
 | --- | --- |
 | W A S D, mouse | fly / walk, steer |
 | Space / C / Shift | rise (and take off) / descend / boost |
-| 1 | breath: hold left click (or F) for fire, right click (or G) for ice |
+| 1 | your element's breath: hold left click (or F) |
 | M | world map: the maze, castles, village, volcano and your friends (north is up) |
-| Z / X / B | lightning (chains between enemies) / explosive fireball (craters the ground) / roar shockwave; each has a cooldown |
+| Z / X / B | your element's other attacks, unlocked as you grow (Z kid, X teenager, B adult) |
+| K | Annihilate (needs the Master Apple), H | guard disguise |
 | 2-7 | blocks (Stone Bricks stay cubic for building; dirt, stone, sand and grass are sculpted smooth): left-click breaks, right-click places, middle-click copies |
 | E | choose which blocks are in your hotbar |
 | 8 / 9 | apple / fire-roasted meat: right-click or R to eat |
@@ -45,6 +46,22 @@ see [deploy/README.md](deploy/README.md).
 
 Terrain and leaves are drawn as smooth rounded surfaces (`src/smooth.js`), trunks as round logs, and the dragon
 and animals from rounded parts. Collisions and building still use blocks underneath.
+
+## Growing up
+
+You start as a **baby dragon** and pick one of four **elements**: 🔥 Fire, ❄ Ice, ⚡ Lightning or ⛰ Earth.
+Each element has a breath (hold left click or F) and three more attacks that you get as you grow:
+
+| | Breath | Kid (Z) | Teenager (X) | Adult (B) |
+| --- | --- | --- | --- | --- |
+| Fire | Fire breath | Fireball | Inferno ring | Meteor storm |
+| Ice | Ice breath (freezes, turns water to ice) | Ice shards | Blizzard | Absolute Zero |
+| Lightning | Spark breath | Chain lightning | Thunder clap | Storm call |
+| Earth | Rock spit | Boulder | Earthquake | Stone skin (6 s of invincibility) |
+
+You grow by opening the **50 chests** hidden at the dead ends of the **Grand Citadel** (a huge castle at about x -252, z -276;
+the map shows it): **10** chests for a kid, **25** for a teenager and **50** for an adult. Each growth makes you bigger, gives you more
+health and more power. You can change your element until you open your first chest. Progress is saved in your browser.
 
 ## Your dragon
 

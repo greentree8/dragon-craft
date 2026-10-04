@@ -1,7 +1,8 @@
 // DOM user interface: menu (play / dragon customizer / feedback / controls), HUD bars, hotbar, block palette.
 import { DEFAULT_LOOK, LOOK_OPTIONS, PRESETS } from './dragon.js';
 import { SLOT, PALETTE, BLOCK_NAMES, FOODS, swatchCss } from './items.js';
-import { MAX_HEALTH, MAX_HUNGER } from './stats.js';
+import { MAX_HUNGER } from './stats.js';
+import { ELEMENTS, ELEMENT_IDS } from './elements.js';
 
 const $ = (id) => document.getElementById(id);
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
@@ -24,6 +25,9 @@ export class UI {
     this.ready = false;
     this.started = false;
     this.paletteOpen = false;
+    this.needElement = false;
+    this.elementLocked = false;
+    this.element = null;
 
     const root = document.documentElement.style;
     root.setProperty('--full', svg(`<path d='${HEART}' fill='#e0303a' stroke='#3a0a0e' stroke-width='1.6' stroke-linejoin='round'/><path d='M6 6.5c1-1.200 3-1.300 3.500.300' stroke='#ff9aa0' stroke-width='1.6' fill='none' stroke-linecap='round'/>`));
@@ -42,8 +46,48 @@ export class UI {
     this.initDragonTab();
     this.initFeedback();
     $('start').addEventListener('click', () => { if (this.ready) this.onPlay(); });
-    $('to-play').addEventListener('click', () => this.showTab('play'));
+    $('to-play').addEventListener('click', () => { if (!this.needElement) this.showTab('play'); });
   }
+
+  // ---------- element picker ----------
+  initElements(onPick) {
+    const box = $('elements');
+    box.innerHTML = '';
+    this.elementCards = {};
+    for (const id of ELEMENT_IDS) {
+      const e = ELEMENTS[id];
+      const card = document.createElement('button');
+      card.className = 'elem';
+      card.innerHTML = `<span class="ei">${e.icon}</span><b>${e.label}</b><small>${e.blurb}</small>`;
+      card.addEventListener('click', () => { if (!this.elementLocked) onPick(id); });
+      box.appendChild(card);
+      this.elementCards[id] = card;
+    }
+  }
+
+  setElement(id) {
+    this.element = id;
+    this.needElement = !id;
+    for (const [k, c] of Object.entries(this.elementCards)) c.classList.toggle('on', k === id);
+    $('to-play').disabled = this.needElement;
+    this.updateStart();
+    this.updateElementHint();
+  }
+
+  setElementLocked(v) { this.elementLocked = v; $('elements').classList.toggle('locked', v); this.updateElementHint(); }
+
+  updateElementHint() {
+    $('element-hint').textContent = this.needElement ? 'Choose the element of your dragon. It decides your attacks.'
+      : this.elementLocked ? 'Your element is locked now that you have opened a chest.' : 'You can still change your element until you open your first chest.';
+  }
+
+  updateStart() {
+    const btn = $('start');
+    btn.disabled = !this.ready || this.needElement;
+    btn.textContent = this.needElement ? 'Pick your element first' : !this.ready ? 'Loading…' : this.started ? 'Resume' : 'Click to fly!';
+  }
+
+  setGrowth(text) { const el = $('growth'); if (el.textContent !== text) el.textContent = text; }
 
   // ---------- menu ----------
   initTabs() {
@@ -64,11 +108,10 @@ export class UI {
   setLoading(frac) { $('loadbar').style.width = `${Math.round(frac * 100)}%`; }
   setReady() {
     this.ready = true;
-    $('start').disabled = false;
-    $('start').textContent = this.started ? 'Resume' : 'Click to fly!';
+    this.updateStart();
     $('loadtext').textContent = 'The world is ready.';
   }
-  markStarted() { this.started = true; $('start').textContent = 'Resume'; }
+  markStarted() { this.started = true; this.updateStart(); }
 
   // ---------- dragon customizer ----------
   initDragonTab() {
@@ -175,10 +218,10 @@ export class UI {
   }
 
   // ---------- HUD ----------
-  setVitals(health, hunger) {
-    this.fill(this.heartsEl, health, MAX_HEALTH);
+  setVitals(health, hunger, maxHealth = 24) {
+    this.fill(this.heartsEl, health, maxHealth);
     this.fill(this.hungerEl, hunger, MAX_HUNGER);
-    this.heartsEl.classList.toggle('low', health <= 12);
+    this.heartsEl.classList.toggle('low', health <= maxHealth * 0.3);
   }
 
   fill(el, value, max) {
@@ -207,7 +250,7 @@ export class UI {
     this.slotEls.forEach((el, i) => {
       el.classList.toggle('sel', i === selected);
       el.querySelectorAll(':scope > :not(.num)').forEach((n) => n.remove());
-      if (i === SLOT.FIRE) el.insertAdjacentHTML('beforeend', iconSvg(FLAME) + '<span class="icebadge" title="Right-click or G: ice breath">❄</span>');
+      if (i === SLOT.FIRE) el.insertAdjacentHTML('beforeend', this.element && this.element !== 'fire' ? `<span class="elemicon">${ELEMENTS[this.element].breath.icon}</span>` : iconSvg(FLAME));
       else if (i === SLOT.APPLE || i === SLOT.MEAT) {
         const key = i === SLOT.APPLE ? 'apple' : 'meat';
         el.insertAdjacentHTML('beforeend', iconSvg(key === 'apple' ? APPLE : DRUMSTICK('#c8702e')) + `<span class="cnt">${food[key]}</span>`);

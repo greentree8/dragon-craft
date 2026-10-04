@@ -7,16 +7,19 @@ import { World } from './world.js';
 import { Sky } from './sky.js';
 import { Dragon, DEFAULT_LOOK } from './dragon.js';
 import { Player } from './player.js';
-import { FireBreath, ICE_BREATH } from './fire.js';
+import { FireBreath, ICE_BREATH, ZAP_BREATH, ROCK_BREATH } from './fire.js';
 import { Bursts } from './effects.js';
 import { Mobs } from './mobs.js';
 import { Enemies } from './enemies.js';
-import { Abilities, ABILITIES } from './abilities.js';
+import { Abilities, DOOM } from './abilities.js';
+import { Progress } from './progress.js';
+import { ELEMENTS, ATTACK_STAGE } from './elements.js';
 import { Disguise } from './disguise.js';
-import { Chests, CHEST_MEAT } from './chests.js';
+import { Chests, GrowChests } from './chests.js';
 import { Labyrinth } from './maze.js';
 import { WorldMap } from './map.js';
 import { MAZES } from './mazegen.js';
+import { CITADEL, CHEST_TOTAL } from './citadel.js';
 import { Vitals } from './stats.js';
 import { Save } from './save.js';
 import { UI } from './ui.js';
@@ -39,6 +42,7 @@ const save = new Save(WORLD);
 await save.init();
 const saved = save.loadState() || {};
 const savedLook = Save.loadLook();
+const progress = new Progress(WORLD);
 
 // multiplayer: join the room's server if there is one (add ?solo to play alone); the server decides the seed
 const net = params.has('solo') ? null : await Net.connect({
@@ -67,6 +71,8 @@ const dragon = new Dragon({ ...DEFAULT_LOOK, ...(savedLook || {}) });
 scene.add(dragon.root);
 const fire = new FireBreath(scene);
 const ice = new FireBreath(scene, ICE_BREATH);
+const zap = new FireBreath(scene, ZAP_BREATH);
+const rock = new FireBreath(scene, ROCK_BREATH);
 const bursts = new Bursts(scene);
 const mobs = new Mobs(scene, world, bursts);
 if (net) {
@@ -79,7 +85,9 @@ const enemies = new Enemies(scene, world, bursts);
 const disguise = new Disguise(scene, dragon, (why) => ui.toast(why === 'attacked' ? 'The guards saw through your disguise!' : why));
 const abilities = new Abilities({ scene, world, bursts, mobs, enemies, canBreak, B });
 const vitals = new Vitals();
+vitals.setMaxHealth(progress.stage.hp);
 vitals.load(saved);
+abilities.power = progress.stage.power;
 const player = new Player(world, canvas);
 if (saved.pos) { player.pos.set(...saved.pos); player.yaw = saved.yaw ?? 0; player.pitch = saved.pitch ?? -0.15; }
 else player.pos.set(SPAWN.x, 70, SPAWN.z);
@@ -122,13 +130,12 @@ const ui = new UI({
     `Dragon Craft v${VERSION} · world "${WORLD}" · seed ${SEED}`,
     `Dragon: ${dragon.look.name} · position ${player.pos.x.toFixed(0)}, ${player.pos.y.toFixed(0)}, ${player.pos.z.toFixed(0)} · time ${sky.clockString()} · ${fps} fps`,
     net ? `Multiplayer room "${WORLD}" · ${net.remotes.size + 1} online` : 'Single player',
-    `Health ${vitals.health}/20 · hunger ${Math.ceil(vitals.hunger)}/20`,
+    `${progress.stage.label} ${progress.element || 'no'} dragon · ${progress.count}/${CHEST_TOTAL} chests · health ${vitals.health}/${vitals.maxHealth} · hunger ${Math.ceil(vitals.hunger)}/20`,
     navigator.userAgent,
   ].join('\n'),
 });
 const radar = new Radar(document.getElementById('hud'));
 ui.buildHotbar(hot);
-ui.buildAbilities([...ABILITIES, { key: 'H', icon: '🛡', name: 'Guard disguise (5 min)' }]);
 const worldMap = new WorldMap(world.gen);
 const mazes = MAZES.map((m) => new Labyrinth(scene, world, enemies, bursts, WORLD, m));
 let masterOwned = false;
@@ -144,8 +151,68 @@ const chests = new Chests(world, WORLD, {
   toast: (t) => ui.toast(t),
   burst: (x, y, z) => { bursts.burst(x, y, z, 0xffd23f, 24, 5, 0.18, 3); bursts.burst(x, y, z, 0xc86a2a, 10, 3, 0.2, 2); },
 });
-ui.setVitals(vitals.health, vitals.hunger);
-ui.showMenu(savedLook ? 'play' : 'dragon');
+const growChests = new GrowChests(world, progress, {
+  meat: (n) => { hot.food.meat += n; refreshHotbar(); },
+  burst: (x, y, z) => { bursts.burst(x, y, z, 0xffd23f, 30, 6, 0.2, 3); bursts.burst(x, y, z, 0xffffff, 12, 4, 0.15, 3); },
+  opened: ({ count, grew }) => {
+    ui.setElementLocked(true);
+    if (grew) applyStage(true);
+    else ui.toast(`Chest ${count}/${CHEST_TOTAL}! ${progress.next ? `${progress.next.min - count} more to grow into a ${progress.next.label}` : 'You are fully grown!'}`);
+    updateGrowthText();
+  },
+});
+
+// ---------- growing up and elements ----------
+let abilityIds = [];
+function buildAbilityBar() {
+  const el = ELEMENTS[progress.element];
+  const slots = el ? el.attacks.map((a) => ({ ...a, stage: ATTACK_STAGE[a.key] })) : [];
+  const list = [...slots, { ...DOOM }, { id: 'disguise', key: 'H', icon: '🛡', name: 'Guard disguise (5 min)' }];
+  abilityIds = list.map((a) => a.id);
+  ui.buildAbilities(list.map((a) => ({ key: a.key, icon: a.icon, name: a.stage && progress.stageIndex < a.stage ? `${a.name} (grow up to unlock)` : a.name })));
+}
+
+function updateGrowthText() {
+  const st = progress.stage, nx = progress.next;
+  ui.setGrowth(`${st.label} ${progress.element ? ELEMENTS[progress.element].label.toLowerCase() : ''} dragon · ${progress.count}/${CHEST_TOTAL} chests${nx ? ` · ${nx.min - progress.count} to ${nx.label}` : ''}`);
+}
+
+// size, health, power and attacks follow your growth stage
+function applyStage(announce) {
+  const st = progress.stage;
+  dragon.look.stage = st.id; dragon.look.element = progress.element;
+  dragon.setStage(st.id);
+  abilities.power = st.power;
+  vitals.setMaxHealth(st.hp);
+  buildAbilityBar();
+  updateGrowthText();
+  net?.send({ t: 'look', look: { ...dragon.look } });
+  Save.saveLook({ ...dragon.look });
+  if (announce) {
+    const el = ELEMENTS[progress.element];
+    const a = el && progress.stageIndex >= 1 ? el.attacks[progress.stageIndex - 1] : null;
+    ui.toast(`You grew into a ${st.label}! ${a ? `New attack: ${a.name} (${a.key})` : ''}`);
+    bursts.burst(player.pos.x, player.pos.y, player.pos.z, 0xffe27a, 50, 9, 0.3, 4, 3);
+  }
+}
+
+function pickElement(id) {
+  if (progress.count > 0) return;
+  progress.setElement(id);
+  ui.setElement(id);
+  ui.changeLook(ELEMENTS[id].palette); // a matching colour scheme (you can still change it)
+  ui.syncDragonTab();
+  applyStage(false);
+  refreshHotbar();
+}
+
+ui.initElements(pickElement);
+ui.setElement(progress.element);
+ui.setElementLocked(progress.count > 0);
+applyStage(false);
+refreshHotbar();
+ui.setVitals(vitals.health, vitals.hunger, vitals.maxHealth);
+ui.showMenu(!progress.element || !savedLook ? 'dragon' : 'play');
 
 let suppressMenu = false, iceHinted = false;
 document.addEventListener('pointerlockchange', () => {
@@ -153,7 +220,7 @@ document.addEventListener('pointerlockchange', () => {
   player.locked = on;
   if (on) {
     ui.hideMenu(); ui.markStarted();
-    if (!iceHinted) { iceHinted = true; setTimeout(() => ui.toast('❄ Hold right-click or G for ICE breath (slot 1)'), 1800); }
+    if (!iceHinted) { iceHinted = true; setTimeout(() => ui.toast('Hold left click (or F) to breathe. Find the 50 chests in the Grand Citadel to grow up!'), 1800); }
   }
   else { worldMap.setOpen(false); player.buttons.clear(); if (!ui.paletteOpen && !suppressMenu) ui.showMenu('play'); }
 });
@@ -165,7 +232,7 @@ function refreshHotbar() { ui.refreshHotbar(hot); }
 function selectSlot(i) {
   hot.selected = (i + 9) % 9;
   refreshHotbar();
-  let name = 'Fire (left click) / Ice (right click)';
+  let name = `${ELEMENTS[progress.element]?.breath.name ?? 'Breath'} (hold left click or F)`;
   if (hot.selected >= SLOT.FIRST_BLOCK && hot.selected <= SLOT.LAST_BLOCK) name = BLOCK_NAMES[hot.blocks[hot.selected - 1]];
   else if (hot.selected === SLOT.APPLE) name = 'Apple';
   else if (hot.selected === SLOT.MEAT) name = FOODS.meat.name;
@@ -228,14 +295,31 @@ function toggleDisguise() {
   else ui.toast(`You can disguise again in ${Math.ceil(disguise.cd)}s`);
 }
 
-function useAbility(id) {
-  if (vitals.dead || !player.ready) return;
-  if (id === 'doom' && !masterOwned) { ui.toast('Find the Master Apple in the Volcano Maze to unlock this attack'); return; }
-  aimFromCrosshair();
-  if (abilities.use(id, mouth, aim, player)) {
-    disguise.stop('attacked');
-    vitals.spend(ABILITIES.find((a) => a.id === id).cost);
+// Z / X / B: the three attacks of your element, unlocked as you grow up
+function useAttack(key) {
+  const el = ELEMENTS[progress.element];
+  if (!el || vitals.dead || !player.ready) return;
+  const a = el.attacks.find((x) => x.key === key);
+  if (!a) return;
+  if (progress.stageIndex < ATTACK_STAGE[key]) { ui.toast(`Grow up to unlock ${a.name}: open more chests in the Grand Citadel`); return; }
+  if (a.id === 'stoneskin') {
+    if ((abilities.cd.stoneskin || 0) > 0) return;
+    abilities.cd.stoneskin = a.cooldown;
+    vitals.invincible = Math.max(vitals.invincible, 6);
+    vitals.spend(a.cost);
+    ui.toast('Stone skin! Nothing can hurt you for 6 seconds');
+    bursts.burst(player.pos.x, player.pos.y, player.pos.z, 0x9a8a70, 30, 6, 0.25, 3, 6);
+    return;
   }
+  aimFromCrosshair();
+  if (abilities.use(a.id, mouth, aim, player)) { disguise.stop('attacked'); vitals.spend(a.cost); }
+}
+
+function useDoom() {
+  if (vitals.dead || !player.ready) return;
+  if (!masterOwned) { ui.toast('Find the Master Apple in the Volcano Maze to unlock this attack'); return; }
+  aimFromCrosshair();
+  if (abilities.use('doom', mouth, aim, player)) { disguise.stop('attacked'); vitals.spend(DOOM.cost); }
 }
 
 addEventListener('keydown', (e) => {
@@ -246,10 +330,10 @@ addEventListener('keydown', (e) => {
   if (/^Digit[1-9]$/.test(e.code)) selectSlot(Number(e.code.slice(5)) - 1);
   else if (e.code === 'KeyE') openPalette();
   else if (e.code === 'KeyR') quickEat();
-  else if (e.code === 'KeyZ') useAbility('lightning');
-  else if (e.code === 'KeyX') useAbility('fireball');
-  else if (e.code === 'KeyB') useAbility('roar');
-  else if (e.code === 'KeyK') useAbility('doom');
+  else if (e.code === 'KeyZ') useAttack('Z');
+  else if (e.code === 'KeyX') useAttack('X');
+  else if (e.code === 'KeyB') useAttack('B');
+  else if (e.code === 'KeyK') useDoom();
   else if (e.code === 'KeyH') toggleDisguise();
   else if (e.code === 'KeyJ') goToFriend();
   else if (e.code === 'KeyM') worldMap.toggle();
@@ -307,11 +391,9 @@ let breakT = 0, placeT = 0, midWas = false, rightWas = false;
 function handleActions(dt) {
   const slot = hot.selected;
   const blockSlot = slot >= SLOT.FIRST_BLOCK && slot <= SLOT.LAST_BLOCK;
-  const fireKey = (slot === SLOT.FIRE && player.buttons.has(0)) || player.keys.has('KeyF');
-  const iceKey = (slot === SLOT.FIRE && player.buttons.has(2)) || player.keys.has('KeyG');
-  const can = player.locked && !vitals.dead;
-  player.breathingIce = can && iceKey && !fireKey;
-  player.breathing = can && (fireKey || iceKey);
+  const breathKey = (slot === SLOT.FIRE && player.buttons.has(0)) || player.keys.has('KeyF');
+  player.breathing = player.locked && !vitals.dead && breathKey;
+  player.breathKind = ELEMENTS[progress.element]?.breath.id || 'fire';
 
   let hit = null;
   if (blockSlot && player.locked && !vitals.dead) hit = findTarget();
@@ -406,7 +488,7 @@ function frame() {
     if (vitals.hunger > 8) hungerWarned = false;
   }
   if (vitals.dead) { deathT -= dt; if (deathT <= 0) respawn(); }
-  if (vitals.changed) { ui.setVitals(vitals.health, vitals.hunger); vitals.changed = false; }
+  if (vitals.changed) { ui.setVitals(vitals.health, vitals.hunger, vitals.maxHealth); vitals.changed = false; }
 
   // dragon
   dragon.root.position.copy(player.pos);
@@ -439,33 +521,45 @@ function frame() {
   if (player.breathing && player.ready) {
     aimFromCrosshair();
     vel.copy(player.vel).multiplyScalar(0.6);
-    if (player.breathingIce) {
+    const pw = abilities.power;
+    if (player.breathKind === 'ice') {
       ice.emit(mouth, aim, vel, dt);
       mobs.freezeCone(mouth, aim, dt);
       enemies.freezeCone(mouth, aim, dt);
       freezeBlocks(mouth, aim, dt);
+    } else if (player.breathKind === 'zap') {
+      zap.emit(mouth, aim, vel, dt);
+      abilities.coneAttack(mouth, aim, dt, { range: 15, widen: 0.2, dps: 9, stun: 0.5 });
+    } else if (player.breathKind === 'rock') {
+      rock.emit(mouth, aim, vel, dt);
+      abilities.coneAttack(mouth, aim, dt, { range: 13, widen: 0.28, dps: 9, push: 40 });
     } else {
       fire.emit(mouth, aim, vel, dt);
-      mobs.burnCone(mouth, aim, dt);
-      enemies.burnCone(mouth, aim, dt);
+      mobs.burnCone(mouth, aim, dt, 15, 8 * pw);
+      enemies.burnCone(mouth, aim, dt, 16, 8 * pw);
     }
   }
   if (net) net.sendState(dt, player, { yaw: relYaw, pitch: lookPitch }, aim);
-  const others = net ? net.update(dt, { fire, ice }, mouth) : { fire: false, ice: false };
-  fire.update(dt, (player.breathing && !player.breathingIce) || others.fire || enemies.drakes.some((d) => d.state === 'breath' && !d.frost));
-  ice.update(dt, player.breathingIce || others.ice || enemies.drakes.some((d) => d.state === 'breath' && d.frost));
+  const others = net ? net.update(dt, { fire, ice, zap, rock }, mouth) : { fire: false, ice: false, zap: false, rock: false };
+  const mine = player.breathing ? player.breathKind : null;
+  fire.update(dt, mine === 'fire' || others.fire || enemies.drakes.some((d) => d.state === 'breath' && !d.frost));
+  ice.update(dt, mine === 'ice' || others.ice || enemies.drakes.some((d) => d.state === 'breath' && d.frost));
+  zap.update(dt, mine === 'zap' || others.zap);
+  rock.update(dt, mine === 'rock' || others.rock);
   bursts.update(dt);
   abilities.update(dt);
   if (player.breathing && disguise.active) disguise.stop('attacked');
   disguise.update(dt, player);
   chests.update(dt, player);
+  growChests.update(dt, player);
   if (player.ready) for (const mz of mazes) mz.update(dt, { pos: player.pos, vel: player.vel, dead: vitals.dead }, mazeHooks);
   { // golden glow while invincible
     const g = vitals.invincible > 0 ? 0.28 + 0.14 * Math.sin(performance.now() / 160) : 0;
     for (const m of [dragon.mats.body, dragon.mats.belly]) m.emissive.setRGB(g, g * 0.72, g * 0.1);
     ui.setInvincible(vitals.invincible > 0 ? `✨ Invincible ${Math.floor(vitals.invincible / 60)}:${String(Math.floor(vitals.invincible % 60)).padStart(2, '0')}` : null);
   }
-  ui.setCooldowns([...abilities.fractions(), disguise.fraction()], ABILITIES.map((a) => a.id === 'doom' && !masterOwned));
+  ui.setCooldowns(abilityIds.map((id) => (id === 'disguise' ? disguise.fraction() : abilities.fraction(id))),
+    abilityIds.map((id, i) => (id === 'doom' ? !masterOwned : i < 3 && progress.stageIndex < i + 1)));
   ui.setDisguise(disguise.active ? `🛡 Disguised as a guard ${disguise.timeText()} · H to take off` : null);
   if (player.ready) enemies.update(dt, { pos: player.pos, vel: player.vel, dead: vitals.dead, disguised: disguise.active }, enemyHooks);
   ui.setBoss(enemies.bossInfo());
@@ -494,7 +588,7 @@ function frame() {
   radar.update(dt, { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw },
     net ? [...net.remotes.values()].filter((r) => r.hasPos).map((r) => ({ name: r.name, x: r.pos.x, y: r.pos.y, z: r.pos.z, color: r.dragon.look.body })) : [],
     net ? (net.connected ? `Room "${WORLD}": no other dragons yet. Send your friend this link!` : 'Reconnecting…')
-      : 'Single player. Could not reach the multiplayer server.', [...CASTLES.map((c) => ({ name: 'Castle', x: c.x, z: c.z })), ...MAZES.map((m) => ({ name: m.name, x: m.x, z: m.z }))]);
+      : 'Single player. Could not reach the multiplayer server.', [...CASTLES.map((c) => ({ name: 'Castle', x: c.x, z: c.z })), { name: 'Grand Citadel', x: CITADEL.x, z: CITADEL.z }, ...MAZES.map((m) => ({ name: m.name, x: m.x, z: m.z }))]);
   if (net && (onlineT -= dt) <= 0) {
     onlineT = 1;
     onlineEl.textContent = net.connected ? `👥 ${[dragon.look.name, ...net.names()].join(', ')}` : '⚠ reconnecting…';
@@ -503,4 +597,4 @@ function frame() {
 frame();
 
 // handy for tests and future features
-window.__game = { mazes, disguise, chests, abilities, composer, ice, enemies, net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE, CASTLE, CASTLES } };
+window.__game = { progress, applyStage, growChests, zap, rock, mazes, disguise, chests, abilities, composer, ice, enemies, net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE, CASTLE, CASTLES } };

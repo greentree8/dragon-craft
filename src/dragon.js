@@ -10,6 +10,9 @@ export const DEFAULT_LOOK = {
   horns: 'short', tail: 'spade', wings: 'bat', wingpairs: 'two', spikes: 'spikes', pattern: 'none', snout: 'short', glow: false,
 };
 
+// growth stages: [overall scale, head scale]. A baby is small with a big head.
+export const STAGE_SCALES = { baby: [0.55, 1.35], kid: [0.75, 1.2], teen: [0.9, 1.1], adult: [1, 1] };
+
 export const LOOK_OPTIONS = {
   horns: ['short', 'long', 'curved', 'none'],
   tail: ['spade', 'club', 'flame', 'plain'],
@@ -149,6 +152,21 @@ export class Dragon {
     this.label = nameSprite(L.name || 'Dragon');
     this.label.position.y = 2.4;
     this.root.add(this.label);
+    this.applyStage();
+  }
+
+  // grow (or shrink back) to a stage id: baby, kid, teen or adult
+  setStage(id) {
+    this.stageId = STAGE_SCALES[id] ? id : 'adult';
+    this.applyStage();
+  }
+
+  applyStage() {
+    if (!this.stageId) return;
+    const [k, h] = STAGE_SCALES[this.stageId];
+    this.root.scale.setScalar(k);
+    if (this.head) this.head.scale.setScalar(h);
+    if (this.label) { this.label.scale.set(3 / k, 0.75 / k, 1); this.label.position.y = 1.9 / k + 0.6; }
   }
 
   clear() {
@@ -220,6 +238,7 @@ export class Dragon {
     head.position.set(0, 0.02, -0.62);
     parent.add(head);
     this.head = head;
+    head.scale.setScalar(this.stageId ? STAGE_SCALES[this.stageId][1] : 1);
     const long = L.snout === 'long';
     const sl = long ? 1.0 : 0.72;
     const tipZ = -(0.55 + 0.72 * sl);

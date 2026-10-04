@@ -1,9 +1,10 @@
 // Health and hunger. Tuned to be forgiving: starving never kills, and there is no fall damage.
-export const MAX_HEALTH = 40; // 10 hearts, 4 points each
+export const MAX_HEALTH = 24; // a baby dragon; it grows with the dragon (see progress.js)
 export const MAX_HUNGER = 20;
 
 export class Vitals {
   constructor() {
+    this.maxHealth = MAX_HEALTH;
     this.health = MAX_HEALTH;
     this.hunger = MAX_HUNGER;
     this.dead = false;
@@ -17,7 +18,7 @@ export class Vitals {
 
   load(s) {
     if (!s) return;
-    this.health = Math.min(MAX_HEALTH, Math.max(1, s.health ?? MAX_HEALTH));
+    this.health = Math.min(this.maxHealth, Math.max(1, s.health ?? this.maxHealth));
     this.hunger = Math.min(MAX_HUNGER, Math.max(0, s.hunger ?? MAX_HUNGER));
     this.changed = true;
   }
@@ -46,9 +47,9 @@ export class Vitals {
     }
 
     // regenerate when well fed, starve (down to one heart) when empty
-    if (this.hunger >= 14 && this.health < MAX_HEALTH) {
+    if (this.hunger >= 14 && this.health < this.maxHealth) {
       this.regenT += dt;
-      if (this.regenT >= 3) { this.regenT = 0; this.health = Math.min(MAX_HEALTH, this.health + 2); this.hunger = Math.max(0, this.hunger - 0.4); this.changed = true; }
+      if (this.regenT >= 3) { this.regenT = 0; this.health = Math.min(this.maxHealth, this.health + 2); this.hunger = Math.max(0, this.hunger - 0.4); this.changed = true; }
     } else this.regenT = 0;
     if (this.hunger <= 0 && this.health > 2) {
       this.starveT += dt;
@@ -66,15 +67,18 @@ export class Vitals {
     return { type: 'hurt', source };
   }
 
+  // growing up: a bigger heart bar, and the new hearts are full
+  setMaxHealth(n) { const gain = n - this.maxHealth; this.maxHealth = n; if (gain > 0) this.health = Math.min(n, this.health + gain); else this.health = Math.min(this.health, n); this.changed = true; }
+
   // abilities cost a little food
   spend(n) { this.hunger = Math.max(0, this.hunger - n); this.changed = true; }
 
   // returns true if something was eaten
   eat(food) {
     if (this.dead || this.eatCooldown > 0) return false;
-    if (this.hunger >= MAX_HUNGER - 0.5 && this.health >= MAX_HEALTH) return false;
+    if (this.hunger >= MAX_HUNGER - 0.5 && this.health >= this.maxHealth) return false;
     this.hunger = Math.min(MAX_HUNGER, this.hunger + food.hunger);
-    this.health = Math.min(MAX_HEALTH, this.health + food.heal);
+    this.health = Math.min(this.maxHealth, this.health + food.heal);
     this.eatCooldown = 0.5;
     this.changed = true;
     return true;
@@ -82,7 +86,7 @@ export class Vitals {
 
   respawn() {
     this.dead = false;
-    this.health = MAX_HEALTH;
+    this.health = this.maxHealth;
     this.hunger = Math.max(this.hunger, 12);
     this.hurtCooldown = 2;
     this.changed = true;

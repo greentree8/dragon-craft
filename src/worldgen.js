@@ -3,6 +3,7 @@ import { Noise, hash2, smoothstep, clamp, mix } from './noise.js';
 import { B } from './blocks.js';
 import { CASTLES, castleBlock } from './castle.js';
 import { MAZES } from './mazegen.js';
+import { CITADEL } from './citadel.js';
 
 export const CHUNK = 16;
 export const HEIGHT = 128;
@@ -171,6 +172,7 @@ export class WorldGen {
     this.stampVillage(data, cx, cz);
     this.stampCastle(data, cx, cz);
     this.stampMaze(data, cx, cz);
+    this.stampCitadel(data, cx, cz);
     this.stampCrystals(data, cx, cz);
     return data;
   }
@@ -203,6 +205,40 @@ export class WorldGen {
       this._castleBase.set(c.id, v);
     }
     return v;
+  }
+
+  nearCitadel(x, z, pad = 0) {
+    return Math.abs(x - CITADEL.x) <= CITADEL.reach + pad && Math.abs(z - CITADEL.z) <= CITADEL.reach + pad;
+  }
+
+  // y of the Grand Citadel's floor layer: the average ground height under it
+  citadelBase() {
+    if (this._citadelBase === undefined) {
+      let sum = 0, n = 0;
+      for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { sum += this.height(CITADEL.x + i * 16, CITADEL.z + j * 16); n++; }
+      this._citadelBase = Math.round(sum / n);
+    }
+    return this._citadelBase;
+  }
+
+  stampCitadel(data, cx, cz) {
+    const C = CITADEL, ox = cx * CHUNK, oz = cz * CHUNK;
+    if (ox > C.x + C.reach || ox + CHUNK <= C.x - C.reach) return;
+    if (oz > C.z + C.reach || oz + CHUNK <= C.z - C.reach) return;
+    const base = this.citadelBase();
+    for (let lz = 0; lz < CHUNK; lz++) for (let lx = 0; lx < CHUNK; lx++) {
+      const dx = ox + lx - C.x, dz = oz + lz - C.z;
+      if (Math.max(Math.abs(dx), Math.abs(dz)) > C.HALF) continue;
+      for (let y = base - 1; y > 2; y--) {
+        const i = (y * CHUNK + lz) * CHUNK + lx;
+        if (data[i] !== B.AIR && data[i] !== B.WATER) break;
+        data[i] = B.STONE_BRICK;
+      }
+      for (let dy = 0; dy <= C.height; dy++) {
+        const id = C.block(dx, dy, dz);
+        if (id !== undefined && base + dy < HEIGHT) data[((base + dy) * CHUNK + lz) * CHUNK + lx] = id;
+      }
+    }
   }
 
   nearMaze(x, z, pad = 0) {
@@ -298,7 +334,7 @@ export class WorldGen {
         }
 
         const h = this.height(px, pz);
-        if (h <= SEA + 1 || h > 62 || this.nearVillage(px, pz, 3) || this.nearCastle(px, pz, 3) || this.nearMaze(px, pz, 3)) continue;
+        if (h <= SEA + 1 || h > 62 || this.nearVillage(px, pz, 3) || this.nearCastle(px, pz, 3) || this.nearMaze(px, pz, 3) || this.nearCitadel(px, pz, 3)) continue;
         if (this.volcanoDist(px, pz) < VOLCANO.radius) continue;
         // skip if a cave punched out the ground here (ground must be solid)
         const { temp, moist } = this.climate(px, pz);

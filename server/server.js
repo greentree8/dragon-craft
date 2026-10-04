@@ -15,7 +15,7 @@ const ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://dragon.gordhamer.com,ht
 
 const MAX_PLAYERS = 8, MAX_ROOMS = 50, MAX_EDITS_PER_ROOM = 600000, DAY_LENGTH = 600;
 const CHUNK_VOLUME = 16 * 128 * 16, MAX_BLOCK_ID = 30, CHUNK_LIMIT = 4000;
-const LOOK_STRINGS = ['horns', 'tail', 'wings', 'wingpairs', 'spikes', 'pattern', 'snout'];
+const LOOK_STRINGS = ['horns', 'tail', 'wings', 'wingpairs', 'spikes', 'pattern', 'snout', 'element', 'stage'];
 const LOOK_COLORS = ['body', 'belly', 'accent', 'wing', 'eye'];
 
 fs.mkdirSync(DATA, { recursive: true });
@@ -144,7 +144,7 @@ wss.on('connection', (ws, req) => {
         p: [round(num(p[0]), 100), round(num(p[1]), 100), round(num(p[2]), 100)],
         y: round(num(m.y, 100), 1000), pi: round(num(m.pi, 100), 1000), r: round(num(m.r, 100), 1000),
         f: m.f ? 1 : 0, sp: round(num(m.sp, 200), 10), vy: round(num(m.vy, 200), 10), b: m.b ? 1 : 0,
-        ly: round(num(m.ly, 100), 1000), lp: round(num(m.lp, 100), 1000), br: m.br === 2 ? 2 : m.br ? 1 : 0,
+        ly: round(num(m.ly, 100), 1000), lp: round(num(m.lp, 100), 1000), br: isInt(m.br, 1, 4) ? m.br : 0,
       };
       if (s.br && Array.isArray(m.a)) s.a = [round(num(m.a[0], 1)), round(num(m.a[1], 1)), round(num(m.a[2], 1))];
       player.state = s;

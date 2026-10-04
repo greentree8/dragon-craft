@@ -3,6 +3,23 @@ import * as THREE from 'three';
 
 const MAX = 700;
 
+// crackling sparks: short, fast, white-blue
+export const ZAP_BREATH = {
+  geometry: () => new THREE.BoxGeometry(0.25, 0.25, 1.4),
+  speed: [24, 34], spread: 0.1, lift: 0, drag: 0.6, rate: 200, life: [0.12, 0.28], size: [0.18, 0.4],
+  lightColor: 0x9ac8ff, lightPower: 40,
+  color(t, col) { if (t < 0.4) col.setRGB(3.6, 3.6, 4.4); else col.setRGB(1.0 + (1 - t), 1.6 + (1 - t), 4.2); },
+};
+
+// a spray of rocks: heavy, falls fast, plain (not glowing)
+export const ROCK_BREATH = {
+  geometry: () => new THREE.DodecahedronGeometry(0.5),
+  additive: false,
+  speed: [15, 23], spread: 0.22, lift: -17, drag: 0.3, rate: 80, life: [0.5, 0.9], size: [0.25, 0.5],
+  lightColor: 0x000000, lightPower: 0,
+  color(t, col) { const k = 0.8 - t * 0.3; col.setRGB(0.55 * k, 0.42 * k, 0.3 * k); },
+};
+
 export const ICE_BREATH = {
   geometry: () => new THREE.OctahedronGeometry(0.5),
   speed: [13, 20], spread: 0.26, lift: -0.8, drag: 1.6, rate: 140, life: [0.55, 0.95], size: [0.2, 0.42],
@@ -20,7 +37,7 @@ export class FireBreath {
     this.opts = { speed: [17, 26], spread: 0.16, lift: 2.2, drag: 1.2, rate: 160, life: [0.45, 0.8], size: [0.25, 0.5], lightColor: 0xff8a30, lightPower: 55, ...opts };
     const geo = this.opts.geometry ? this.opts.geometry() : new THREE.BoxGeometry(1, 1, 1);
     const mat = new THREE.MeshBasicMaterial({
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+      transparent: true, depthWrite: false, blending: this.opts.additive === false ? THREE.NormalBlending : THREE.AdditiveBlending, fog: this.opts.additive === false,
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, MAX);
     this.mesh.frustumCulled = false;

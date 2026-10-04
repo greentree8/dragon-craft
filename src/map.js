@@ -2,6 +2,7 @@
 import { SEA, VILLAGE, VOLCANO, LAKE, CRYSTAL_ISLE } from './worldgen.js';
 import { CASTLES } from './castle.js';
 import { MAZES } from './mazegen.js';
+import { CITADEL } from './citadel.js';
 
 const SPAN = 1000;          // blocks across, centred on the origin
 const RES = 4;              // blocks per terrain pixel
@@ -16,6 +17,7 @@ const PLACES = [
   { name: 'Crystal Isle', icon: 'crystal', x: CRYSTAL_ISLE.x, z: CRYSTAL_ISLE.z },
   ...MAZES.map((m) => ({ name: m.name, icon: m.id === 'volcano' ? 'volcanomaze' : 'maze', x: m.x, z: m.z, big: true })),
   ...CASTLES.map((c, i) => ({ name: `Castle ${i + 1}`, icon: 'castle', x: c.x, z: c.z, big: true })),
+  { name: 'Grand Citadel', icon: 'citadel', x: CITADEL.x, z: CITADEL.z, big: true },
 ];
 
 // vector icons, so the map never depends on emoji fonts
@@ -27,6 +29,11 @@ function drawIcon(g, kind, x, y, k) {
     g.fillStyle = '#8c919b';
     for (const dx of [-k, -k * 0.2, k * 0.6]) { g.fillRect(x + dx, y - k * 1.1, k * 0.4, k * 0.4); g.strokeRect(x + dx, y - k * 1.1, k * 0.4, k * 0.4); }
     g.fillStyle = '#3a3d44'; g.fillRect(x - k * 0.25, y, k * 0.5, k * 0.7);
+  } else if (kind === 'citadel') {
+    box('#c9a23a', k * 1.2, k * 0.9);
+    g.fillStyle = '#c9a23a';
+    for (const dx of [-1.2, -0.4, 0.4]) { g.fillRect(x + dx * k, y - k * 1.3, k * 0.5, k * 0.5); g.strokeRect(x + dx * k, y - k * 1.3, k * 0.5, k * 0.5); }
+    g.fillStyle = '#3a2a10'; g.fillRect(x - k * 0.3, y - k * 0.1, k * 0.6, k * 0.9);
   } else if (kind === 'maze') {
     box('#9b3fe0', k, k);
     g.strokeStyle = '#e8c8ff'; g.lineWidth = 3; g.beginPath();

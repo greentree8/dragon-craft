@@ -42,3 +42,31 @@ export class Chests {
     }
   }
 }
+
+// The Grand Citadel's 50 growth chests. Each opens once (per browser) and counts towards growing up.
+import { CITADEL, citadelInfo, chestPos } from './citadel.js';
+
+export class GrowChests {
+  // hooks: { burst(x, y, z), meat(n), opened({ count, grew }), toast(text) }
+  constructor(world, progress, hooks) { this.world = world; this.progress = progress; this.hooks = hooks; this.t = 0; }
+
+  update(dt, player) {
+    this.t -= dt;
+    if (this.t > 0) return;
+    this.t = 0.15;
+    if (Math.abs(player.pos.x - CITADEL.x) > CITADEL.reach + 6 || Math.abs(player.pos.z - CITADEL.z) > CITADEL.reach + 6) return;
+    const base = this.world.gen.citadelBase();
+    for (const c of citadelInfo().chestList) {
+      if (this.progress.opened.has(c.index)) continue;
+      const p = chestPos(base, c);
+      if (Math.abs(player.pos.x - (p.x + 0.5)) > 3 || Math.abs(player.pos.z - (p.z + 0.5)) > 3) continue;
+      if (this.world.getBlock(p.x, p.y, p.z) !== B.CHEST) continue;
+      if (Math.hypot(player.pos.x - (p.x + 0.5), player.pos.y - (p.y + 0.5), player.pos.z - (p.z + 0.5)) > 2.7) continue;
+      const res = this.progress.open(c.index);
+      if (!res) continue;
+      this.hooks.meat(10);
+      this.hooks.burst(p.x + 0.5, p.y + 0.9, p.z + 0.5);
+      this.hooks.opened(res);
+    }
+  }
+}
