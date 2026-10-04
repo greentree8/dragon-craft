@@ -3,7 +3,7 @@
 // The layout is a pure seeded function, so every player gets the same castle.
 import { B } from './blocks.js';
 
-const { AIR, STONE_BRICK: SB, COBBLE, LANTERN, GOLD, LOG, CHEST } = B;
+const { AIR, STONE_BRICK: SB, COBBLE, PLANKS, LANTERN, GOLD, LOG, CHEST } = B;
 
 const N = 17, U = 3, G = 2 * N + 1, S = G * U, HALF = (S - 1) / 2; // 35 x 35 units of 3 blocks = 105 blocks
 export const CITADEL = { id: 'citadel', name: 'Grand Citadel', x: -252, z: -276, N, U, G, S, HALF, reach: HALF + 1, height: 40 };
@@ -59,7 +59,35 @@ export function citadelInfo() {
   const shafts = new Set();
   const free = shuffle(others.filter((c) => !chests.has(c.floor * G * G + c.gz * G + c.gx)));
   for (const c of free) { if (shafts.size >= 18) break; shafts.add(c.gz * G + c.gx); }
-  _info = { floors, chests, chestList: cells, shafts };
+  // traps and guards, spread through the corridors of both floors (never in a chest cell, a shaft or near the front gate)
+  const trng = mulberry32(99001);
+  const tiles = new Map(), traps = [], spots = [];
+  for (let f = 0; f < 2; f++) for (let gz = 1; gz < G; gz += 2) for (let gx = 1; gx < G; gx += 2) {
+    const key = f * G * G + gz * G + gx;
+    if (chests.has(key) || shafts.has(gz * G + gx)) continue;
+    if (f === 0 && Math.abs(gx - 1) + Math.abs(gz - (G - 2)) < 12) continue;
+    spots.push({ floor: f, gx, gz });
+    if (trng() > 0.1) continue;
+    const l = isOpen(f, gx - 1, gz), r = isOpen(f, gx + 1, gz), u = isOpen(f, gx, gz - 1), d = isOpen(f, gx, gz + 1);
+    const straightX = l && r && !u && !d, straightZ = u && d && !l && !r;
+    const roll = trng();
+    let kind = roll < 0.4 ? 'flame' : 'turret';
+    if ((straightX || straightZ) && roll > 0.55) kind = 'gate';
+    const t = { kind, floor: f, gx, gz, phase: trng() * 4 };
+    if (kind === 'gate') t.axis = straightX ? 'x' : 'z';
+    if (kind === 'turret') {
+      const walls = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dz]) => !isOpen(f, gx + dx, gz + dz));
+      if (!walls.length) continue;
+      t.wall = walls[Math.floor(trng() * walls.length)];
+    }
+    traps.push(t);
+    if (kind !== 'turret') tiles.set(key, kind);
+  }
+  const rest = shuffle(spots.slice());
+  const garrison = [];
+  const kinds = [...Array(14).fill('knight'), ...Array(8).fill('wizard'), ...Array(6).fill('golem')];
+  kinds.forEach((type, i) => { if (rest[i]) garrison.push({ type, ...rest[i] }); });
+  _info = { floors, chests, chestList: cells, shafts, traps, tiles, garrison };
   return _info;
 }
 
@@ -93,17 +121,27 @@ CITADEL.block = (dx, dy, dz) => {
   const gx = Math.floor(mx / U), gz = Math.floor(mz / U);
   const mid = mx % U === 1 && mz % U === 1;
   const outer = gx === 0 || gz === 0 || gx === G - 1 || gz === G - 1;
-  if (dy === 0) return SB;
+  if (dy === 0) { const t = info.tiles.get(gz * G + gx); return t === 'flame' ? PLANKS : t === 'gate' ? COBBLE : SB; } // a tile of a different kind marks a trap
   if (dy <= 5 || (dy >= 7 && dy <= 11)) {
     const f = dy <= 5 ? 0 : 1, y0 = f === 0 ? 1 : 7;
     if (info.floors[f][gz * G + gx] === 1) return mid && dy === y0 && info.chests.has(f * G * G + gz * G + gx) ? CHEST : AIR;
     return outer ? SB : COBBLE;
   }
-  if (dy === 6) return info.shafts.has(gz * G + gx) ? AIR : (info.floors[0][gz * G + gx] === 1 && mid && (gx + gz) % 6 === 0 ? LANTERN : SB);
-  return info.floors[1][gz * G + gx] === 1 && mid && (gx + gz) % 6 === 3 ? LANTERN : SB; // dy 12: the roof slab
+  if (dy === 6) {
+    if (info.shafts.has(gz * G + gx)) return AIR;
+    const t = info.tiles.get(G * G + gz * G + gx);
+    if (t) return t === 'flame' ? PLANKS : COBBLE;
+    return info.floors[0][gz * G + gx] === 1 && mid && (gx + gz) % 4 === 0 ? LANTERN : SB;
+  }
+  return info.floors[1][gz * G + gx] === 1 && mid && (gx + gz) % 4 === 2 ? LANTERN : SB; // dy 12: the roof slab, with lanterns
 };
 
 // world position of a chest block
 export function chestPos(base, c) {
   return { x: CITADEL.x + c.gx * U + 1 - HALF, y: base + (c.floor === 0 ? 1 : 7), z: CITADEL.z + c.gz * U + 1 - HALF };
+}
+
+// world position of the middle of a corridor square (at the floor surface)
+export function cellCenter(base, floor, gx, gz) {
+  return { x: CITADEL.x + gx * U + 1 - HALF + 0.5, y: base + (floor === 0 ? 1 : 7), z: CITADEL.z + gz * U + 1 - HALF + 0.5 };
 }

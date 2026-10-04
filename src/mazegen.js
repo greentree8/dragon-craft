@@ -100,7 +100,7 @@ export function makeMaze(cfg) {
     }
     if (dy === 1 && open && info.lava.has(gz * G + gx)) return LAVA;
     if (dy <= 4) return open ? AIR : outer ? theme.outer : theme.wall;
-    if (dy === 5) return open && mid && (gx + gz) % 4 === 0 ? theme.light : theme.ceil; // roof, with a few lights
+    if (dy === 5) return open && mid && (gx + gz) % 2 === 0 ? theme.light : theme.ceil; // roof, with a lantern over every corridor square
     return AIR;
   };
   return maze;

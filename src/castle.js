@@ -25,7 +25,7 @@ export function castleBlock(dx, dy, dz) {
   if (ax >= 13 && az >= 13) {
     const edge = Math.max(ax - 16, az - 16, 16 - ax, 16 - az) >= 3;
     if (dy <= 12) return SB;
-    if (dy === 13) return edge ? SB : AIR;
+    if (dy === 13) return edge ? SB : (ax === 16 && az === 16 ? LANTERN : AIR);
     if (dy === 14) return edge && (ax + az) % 2 === 0 ? SB : AIR;
     return AIR;
   }
@@ -51,6 +51,8 @@ export function castleBlock(dx, dy, dz) {
     for (const [cx, cy, cz] of CHEST_OFFSETS) if (dx === cx && dy === cy && dz === cz) return CHEST;
     if (dy === 8) return ax <= 1 && az <= 1 ? AIR : PLANKS;
     if (dy === 7 && ((ax === 3 && az === 3) || (ax === 0 && az === 0))) return LANTERN;
+    if (dy === 14 && ((ax === 3 && az === 3) || (ax === 0 && az === 3) || (ax === 3 && az === 0) || (ax === 0 && az === 0))) return LANTERN; // upstairs lights
+    if (dy === 4 && ((ax === 4 && az === 0) || (ax === 0 && az === 4))) return LANTERN;                                                     // hall lights
     if (dy === 1 && dz === -3 && ax <= 2) return GOLD; // treasure
     if (dy === 2 && dz === -3 && ax <= 1) return GOLD;
     if (dy === 1 && (ax === 4 && az === 4)) return LANTERN;
@@ -65,7 +67,7 @@ export function castleBlock(dx, dy, dz) {
     }
     if (dy === 9 || dy === 10) {
       if (m === 16 && (ax + az) % 2 === 0) return SB;                       // merlons
-      if (dy === 9 && m === 15 && (dx + dz) % 6 === 0) return LANTERN;      // wall lights
+      if (dy === 9 && m === 15 && (dx + dz) % 3 === 0) return LANTERN;      // wall lights
       return AIR;
     }
     return AIR;
@@ -75,7 +77,9 @@ export function castleBlock(dx, dy, dz) {
   if (dy === 0) return COBBLE;
   if (m >= 17 && ax <= 2 && dz > 0) return AIR;
   // lantern posts
-  if (ax === 10 && az === 10) return dy <= 2 ? LOG : dy === 3 ? LANTERN : AIR;
+  if (ax === 10 && (az === 10 || az === 0)) return dy <= 2 ? LOG : dy === 3 ? LANTERN : AIR;
+  if (az === 10 && ax === 0) return dy <= 2 ? LOG : dy === 3 ? LANTERN : AIR;
+  if (ax === 4 && dz === 8) return dy <= 2 ? LOG : dy === 3 ? LANTERN : AIR;
   if (ax === 3 && dz === 18) return dy <= 2 ? LOG : dy === 3 ? LANTERN : AIR;
   return AIR;
 }
@@ -86,8 +90,21 @@ export const GARRISON = [
   ['knight', -3, 2, 1], ['knight', 3, 2, 1],
   ['knight', -8, 4, 1], ['knight', 8, 4, 1], ['knight', -7, -8, 1], ['knight', 7, -8, 1], ['knight', 0, 10, 1],
   ['knight', -2, 22, 1], ['knight', 2, 22, 1],
+  // wizards cast bolts and blink away; golems are slow, tough and hit hard
+  ['wizard', -5, 8, 1], ['wizard', 5, 8, 1], ['wizard', 3, 3, 9], ['wizard', -3, -3, 9],
+  ['golem', -11, 0, 1], ['golem', 11, 0, 1], ['golem', 0, 24, 1],
   // archers on the wall walkway and the tower tops
   ['archer', -8, -15.5, 9], ['archer', 8, -15.5, 9], ['archer', -15.5, -4, 9], ['archer', -15.5, 6, 9],
   ['archer', 15.5, -4, 9], ['archer', 15.5, 6, 9], ['archer', -8, 15.5, 9], ['archer', 8, 15.5, 9],
   ['archer', -16, -16, 13], ['archer', 16, -16, 13], ['archer', -16, 16, 13], ['archer', 16, 16, 13],
+];
+
+// Castle traps (offsets from the centre; floor surface is the courtyard floor): turrets in the inner faces of the curtain wall,
+// flame jets in the courtyard and keep, and spike gates in the front gate and the keep door.
+export const CASTLE_TRAPS = [
+  ...[[-9, -13.45], [-3, -13.45], [3, -13.45], [9, -13.45], [14.45, -8], [14.45, 0], [14.45, 8], [-13.45, -8], [-13.45, 0], [-13.45, 8], [-9, 14.45], [9, 14.45]]
+    .map(([dx, dz]) => ({ kind: 'turret', dx, dz, up: 2.3 })),
+  ...[[-9, -4], [8, -4], [-9, 5], [8, 5], [-1, -11], [-1, 11], [-3, 1], [2, 1]].map(([ix, iz]) => ({ kind: 'flame', dx: ix + 0.5, dz: iz + 0.5 })),
+  { kind: 'gate', dx: 0.5, dz: 16, axis: 'z', width: 5 },
+  { kind: 'gate', dx: 0.5, dz: 6, axis: 'z', width: 3 },
 ];

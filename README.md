@@ -89,6 +89,13 @@ Winding tunnels (the way to the middle is hundreds of blocks long) are full of t
 **flame jets** (the wooden floor tile glows before it bursts) and **spike gates** that rise and fall (rough cobble tiles).
 At the far end a **Golden Apple** waits on a gold pedestal: eat it to be **invincible for 10 minutes**. It comes back 20 minutes later.
 
+## Castle defences
+
+Every castle is full of defences. Besides knights, archers and the Castle Lord there are **wizards** (they cast pairs of magic bolts and blink away when you get close)
+and slow, tough **golems** (they hit hard). **Arrow turrets** sit in the inner walls, **flame jets** (the floor glows before they burst) are in the courtyard and keep,
+and **spike gates** rise and fall in the front gate and the keep door. The **Grand Citadel** has the same: 14 knights, 8 wizards and 6 golems patrol its corridors,
+and 46 traps guard the way to the 50 chests. Castles, mazes and the citadel are lit with plenty of lanterns, and your dragon carries a warm light inside them.
+
 ## The Volcano Maze
 
 East of the volcano (about x 266, z -48; the map shows it) is a second, harder maze with black glass walls.

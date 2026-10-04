@@ -74,6 +74,9 @@ const ice = new FireBreath(scene, ICE_BREATH);
 const zap = new FireBreath(scene, ZAP_BREATH);
 const rock = new FireBreath(scene, ROCK_BREATH);
 const bursts = new Bursts(scene);
+// a warm light that goes with you inside castles, mazes and the citadel, where the roofs block the sun
+const indoorLight = new THREE.PointLight(0xffe2b8, 0, 28, 1.3);
+scene.add(indoorLight);
 const mobs = new Mobs(scene, world, bursts);
 if (net) {
   net.attach(scene, world);
@@ -483,6 +486,8 @@ function frame() {
   }
 
   player.update(dt);
+  indoorLight.position.set(player.pos.x, player.pos.y + 1.5, player.pos.z);
+  indoorLight.intensity += ((world.gen.isProtected(Math.floor(player.pos.x), Math.floor(player.pos.y), Math.floor(player.pos.z)) ? 2.6 : 0) - indoorLight.intensity) * Math.min(1, dt * 6);
   sky.update(dt, player.pos);
   handleActions(dt);
 

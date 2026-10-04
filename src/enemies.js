@@ -1,31 +1,36 @@
-// Castle guards: knights chase and swing, archers shoot arrows from the walls, and the Castle Lord guards the keep.
+// Castle guards: knights chase and swing, archers shoot arrows from the walls, wizards cast bolts and blink away,
+// golems are slow and tough, and the Castle Lord guards the keep. Castles also have traps (see traps.js).
 // Fire breath hurts them. They are local to each player (like the animals).
 import * as THREE from 'three';
-import { B } from './blocks.js';
+import { B, isSolid } from './blocks.js';
 import { moveBox } from './physics.js';
 import { softGeometry } from './soft.js';
-import { CASTLES, GARRISON } from './castle.js';
+import { CASTLES, GARRISON, CASTLE_TRAPS } from './castle.js';
+import { CITADEL, citadelInfo, cellCenter } from './citadel.js';
+import { TrapField } from './traps.js';
 import { Drake, DRAKE_MAX_HP } from './drake.js';
 
 const SPEC = {
   knight: { hp: 14, speed: 2.7, hx: 0.35, hy: 0.95, dmg: 3, sight: 30, scale: 1 },
   archer: { hp: 8, speed: 0, hx: 0.3, hy: 0.9, dmg: 2, sight: 42, scale: 1 },
   boss: { hp: 60, speed: 2.2, hx: 0.6, hy: 1.55, dmg: 5, sight: 40, scale: 1.7 },
+  wizard: { hp: 16, speed: 2.2, hx: 0.35, hy: 0.95, dmg: 3, sight: 38, scale: 1 },
+  golem: { hp: 55, speed: 1.5, hx: 0.65, hy: 1.45, dmg: 6, sight: 28, scale: 1.6 },
 };
 const ARROW_SPEED = 28, ARROW_GRAVITY = 9, MAX_ARROWS = 24, SPAWN_RANGE = 115, DESPAWN_RANGE = 190;
 
 // A person built from rounded parts, feet at y = 0, facing -Z.
 export function humanoid(type) {
-  const boss = type === 'boss', archer = type === 'archer';
+  const boss = type === 'boss', archer = type === 'archer', wizard = type === 'wizard', golem = type === 'golem';
   const mats = new Map();
   const mat = (c, glow = 0) => {
     const key = `${c}:${glow}`;
     let m = mats.get(key);
-    if (!m) { m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, metalness: archer ? 0 : 0.45 }); if (glow) { m.emissive.set(c); m.emissiveIntensity = glow; } mats.set(key, m); }
+    if (!m) { m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, metalness: archer || wizard ? 0 : 0.45 }); if (glow) { m.emissive.set(c); m.emissiveIntensity = glow; } mats.set(key, m); }
     return m;
   };
-  const steel = boss ? 0x2a2a35 : archer ? 0x6b4a2b : 0x9aa3ad;
-  const cloth = boss ? 0x4a1d6b : archer ? 0x2f6b34 : 0xb33a3a;
+  const steel = boss ? 0x2a2a35 : archer ? 0x6b4a2b : wizard ? 0x4a2a8a : golem ? 0x8a8c92 : 0x9aa3ad;
+  const cloth = boss ? 0x4a1d6b : archer ? 0x2f6b34 : wizard ? 0xe0b030 : golem ? 0x4a6a3a : 0xb33a3a;
   const g = new THREE.Group();
   const part = (parent, w, h, d, color, x, y, z, e = 0.75) => {
     const m = new THREE.Mesh(softGeometry(w, h, d, e), mat(color));
@@ -41,8 +46,18 @@ export function humanoid(type) {
   part(g, 0.74, 0.8, 0.44, steel, 0, 1.25, 0, 0.7);          // chest
   part(g, 0.78, 0.18, 0.48, cloth, 0, 0.88, 0, 0.7);          // tabard / belt
   const head = new THREE.Group(); head.position.set(0, 1.78, 0); g.add(head);
-  part(head, 0.44, 0.48, 0.46, archer ? cloth : steel, 0, 0, 0, 0.85);
-  if (!archer) {
+  part(head, 0.44, 0.48, 0.46, wizard ? 0xe9c7a0 : archer ? cloth : steel, 0, 0, 0, 0.85);
+  if (wizard) {
+    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.75, 12), mat(0x4a2a8a)); hat.position.set(0, 0.58, 0); head.add(hat);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.05, 16), mat(0x4a2a8a)); brim.position.set(0, 0.24, 0); head.add(brim);
+    part(head, 0.3, 0.3, 0.12, 0xf2f2f2, 0, -0.22, -0.16, 0.8);  // beard
+    part(head, 0.06, 0.06, 0.06, 0x2a1a4a, 0.1, 0.04, -0.22, 1); part(head, 0.06, 0.06, 0.06, 0x2a1a4a, -0.1, 0.04, -0.22, 1);
+    part(g, 0.84, 0.95, 0.52, steel, 0, 0.55, 0, 0.7);           // the long robe
+  } else if (golem) {
+    part(head, 0.1, 0.08, 0.08, 0xff8a1a, 0.1, 0.02, -0.23, 1).material = mat(0xff8a1a, 2.8);
+    part(head, 0.1, 0.08, 0.08, 0xff8a1a, -0.1, 0.02, -0.23, 1).material = mat(0xff8a1a, 2.8);
+    for (const s of [-1, 1]) part(g, 0.5, 0.34, 0.5, steel, 0.56 * s, 1.68, 0, 0.7); // rocky shoulders
+  } else if (!archer) {
     part(head, 0.36, 0.07, 0.1, 0x111116, 0, 0.02, -0.22, 0.5);          // visor slit
     part(head, 0.1, 0.3, 0.34, boss ? 0x7a2bd1 : 0xc22b2b, 0, 0.3, 0.02, 0.8); // plume
   } else part(head, 0.2, 0.2, 0.06, 0xe9c7a0, 0, -0.04, -0.22, 0.9); // face under the hood
@@ -67,6 +82,11 @@ export function humanoid(type) {
     const bow = new THREE.Mesh(new THREE.TorusGeometry(0.45, 0.025, 6, 16, Math.PI), mat(0x5a3b1c));
     bow.rotation.z = Math.PI / 2; bow.position.set(-0.05, -0.62, -0.25); armL.add(bow);
     armL.rotation.x = -1.2;
+  } else if (wizard) {
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.9, 8), mat(0x5a3b1c)); staff.position.set(0, -0.35, -0.12); armR.add(staff);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), mat(0xb44dff, 2.4)); orb.position.set(0, 0.62, -0.12); armR.add(orb);
+  } else if (golem) {
+    for (const a of [armL, armR]) part(a, 0.46, 0.46, 0.46, steel, 0, -0.78, 0, 0.8); // big stone fists
   } else {
     const blade = part(armR, 0.07, 1.0, 0.04, 0xe6edf2, 0, -1.05, -0.12, 0.5);
     blade.material = mat(0xe6edf2); blade.rotation.x = -0.3;
@@ -82,7 +102,8 @@ export class Enemies {
   constructor(scene, world, bursts) {
     this.scene = scene; this.world = world; this.bursts = bursts;
     this.list = []; this.arrows = [];
-    this.sites = CASTLES.map((c) => ({ c, spawned: false, clearedAt: null, warned: false, drake: null }));
+    const mk = (c, kind) => ({ c, kind, spawned: false, clearedAt: null, warned: false, drake: null, traps: null, base: 0 });
+    this.sites = [...CASTLES.map((c) => mk(c, 'castle')), mk({ id: 'citadel', x: CITADEL.x, z: CITADEL.z, reach: CITADEL.reach }, 'citadel')];
     this.kills = 0;
     this._v = new THREE.Vector3(); this._d = new THREE.Vector3(); this._q = new THREE.Quaternion();
     this.arrowGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6);
@@ -95,10 +116,40 @@ export class Enemies {
 
   spawnGarrison(site) {
     const { c } = site;
-    const base = this.world.gen.castleBase(c);
-    for (const [type, dx, dz, dy] of GARRISON) this.spawn(type, c.x + 0.5 + dx, base + dy, c.z + 0.5 + dz, site);
-    site.drake = new Drake(this.scene, this.world, { x: c.x + 0.5, z: c.z + 0.5, base }, this);
+    if (site.kind === 'citadel') {
+      const base = this.world.gen.citadelBase();
+      for (const g of citadelInfo().garrison) { const p = cellCenter(base, g.floor, g.gx, g.gz); this.spawn(g.type, p.x, p.y, p.z, site); }
+    } else {
+      const base = this.world.gen.castleBase(c);
+      for (const [type, dx, dz, dy] of GARRISON) this.spawn(type, c.x + 0.5 + dx, base + dy, c.z + 0.5 + dz, site);
+      site.drake = new Drake(this.scene, this.world, { x: c.x + 0.5, z: c.z + 0.5, base }, this);
+    }
     site.spawned = true;
+  }
+
+  // the traps live as long as you are near, even after the guards are gone
+  spawnTraps(site) {
+    const { c } = site;
+    const descs = [];
+    if (site.kind === 'citadel') {
+      const base = this.world.gen.citadelBase();
+      site.base = base;
+      for (const t of citadelInfo().traps) {
+        const p = cellCenter(base, t.floor, t.gx, t.gz);
+        descs.push({ kind: t.kind, x: p.x, y: p.y, z: p.z, phase: t.phase, ammo: 'arrow', wall: t.wall, axis: t.axis });
+      }
+    } else {
+      const base = this.world.gen.castleBase(c);
+      site.base = base;
+      for (const t of CASTLE_TRAPS) {
+        const x = c.x + t.dx, z = c.z + t.dz, y = base + 1;
+        if (t.kind === 'turret') descs.push({ kind: 'turret', x, y, z, at: [x, y + t.up, z], ammo: 'arrow', phase: Math.random() * 4 });
+        else if (t.kind === 'flame') descs.push({ kind: 'flame', x, y, z, phase: Math.random() * 5, half: 1.8 });
+        else descs.push({ kind: 'gate', x, y, z, axis: t.axis, width: t.width, phase: Math.random() * 4 });
+      }
+    }
+    site.traps = new TrapField(this.scene, this.world, this, this.bursts);
+    site.traps.add(descs);
   }
 
   spawn(type, x, feetY, z, site) {
@@ -177,7 +228,9 @@ export class Enemies {
       for (let i = 0; i < 4; i++) hooks.drop('apple', p.x, p.y, p.z);
       for (let i = 0; i < 3; i++) hooks.drop('meat', p.x, p.y, p.z);
       hooks.toast('You defeated the Castle Lord! The castle is yours!');
-    } else if (Math.random() < 0.5) hooks.drop(Math.random() < 0.5 ? 'meat' : 'apple', p.x, p.y, p.z);
+    } else if (m.type === 'golem') {
+      for (let i = 0; i < 2; i++) hooks.drop('meat', p.x, p.y, p.z);
+    } else if (Math.random() < (m.type === 'wizard' ? 0.7 : 0.5)) hooks.drop(Math.random() < 0.5 ? 'meat' : 'apple', p.x, p.y, p.z);
     this.remove(m);
   }
 
@@ -208,6 +261,26 @@ export class Enemies {
     return !hit || hit.t > dist - 1;
   }
 
+  // teleport a wizard to somewhere nearby with floor under it and room to stand
+  blink(m) {
+    const w = this.world;
+    for (let i = 0; i < 12; i++) {
+      const a = Math.random() * Math.PI * 2, r = 6 + Math.random() * 4;
+      const nx = m.pos.x + Math.cos(a) * r, nz = m.pos.z + Math.sin(a) * r;
+      if (Math.hypot(nx - m.home.x, nz - m.home.z) > 20) continue;
+      const bx = Math.floor(nx), bz = Math.floor(nz);
+      for (let y = Math.floor(m.pos.y) + 2; y > Math.floor(m.pos.y) - 6; y--) {
+        if (isSolid(w.getBlock(bx, y - 1, bz)) && !isSolid(w.getBlock(bx, y, bz)) && !isSolid(w.getBlock(bx, y + 1, bz)) && !isSolid(w.getBlock(bx, y + 2, bz))) {
+          this.bursts.burst(m.pos.x, m.pos.y, m.pos.z, 0xb44dff, 14, 4, 0.2, 2, 3);
+          m.pos.set(nx, y + m.hy + 0.05, nz); m.vel.set(0, 0, 0);
+          this.bursts.burst(nx, y + 1, nz, 0xb44dff, 14, 4, 0.2, 2, 3);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   step(m, dt, player, hooks) {
     const w = this.world;
     if (!w.isLoaded(m.pos.x, m.pos.z)) return;
@@ -228,6 +301,18 @@ export class Enemies {
         face = [tx, tz];
         m.arms[0].rotation.x = -1.3 + Math.sin(performance.now() / 300) * 0.03;
         if (m.cd <= 0) { m.cd = 2.6 + Math.random() * 1.2; this.fire(eye, player.pos, ARROW_SPEED, 'arrow', 1.4, player.vel); }
+      }
+    } else if (m.type === 'wizard') {
+      // wizards cast pairs of magic bolts from a distance, and blink away when you get close
+      m.aggro = !hidden && dist < m.spec.sight && this.lineOfSight(eye, player.pos);
+      m.blinkT = (m.blinkT ?? 0) - dt;
+      if (m.aggro) {
+        face = [tx, tz];
+        if (m.cd <= 0) {
+          m.cd = 2.8 + Math.random() * 1.4; m.swing = 0.35;
+          for (const off of [-1.3, 1.3]) { const t = player.pos.clone(); t.x += off; t.z -= off; this.fire(eye.clone().setY(eye.y + 0.4), t, 17, 'bolt', 0.8, player.vel); }
+        }
+        if (dist2d < 6 && m.blinkT <= 0) { m.blinkT = 6; this.blink(m); }
       }
     } else {
       const fromHome = m.home.distanceTo(m.pos);
@@ -287,13 +372,23 @@ export class Enemies {
     for (const site of this.sites) {
       const { c } = site;
       const dc = Math.hypot(player.pos.x - c.x, player.pos.z - c.z);
-      if (!site.warned && dc < 100) { site.warned = true; hooks.toast(c.id === 0 ? 'A castle! Its guards (and a dragon) have spotted you…' : 'Another castle! Beware its Dread Drake…'); }
+      if (!site.warned && dc < 100) {
+        site.warned = true;
+        hooks.toast(c.id === 'citadel' ? 'The Grand Citadel! Guards and traps fill its corridors. The 50 chests are hidden inside…' : c.id === 0 ? 'A castle! Its guards (and a dragon) have spotted you…' : 'Another castle! Beware its Dread Drake…');
+      }
       if (!site.spawned && dc < SPAWN_RANGE && this.world.isLoaded(c.x, c.z) && (site.clearedAt === null || (now - site.clearedAt > 240 && dc > 90))) {
         site.clearedAt = null;
         this.spawnGarrison(site);
       }
       if (site.spawned && dc > DESPAWN_RANGE) { this.clearSite(site); site.spawned = false; }
       if (site.drake) site.drake.update(dt, player, hooks);
+      // traps stay as long as you are near, whether or not the guards are alive
+      if (!site.traps && dc < SPAWN_RANGE && this.world.isLoaded(c.x, c.z)) this.spawnTraps(site);
+      if (site.traps && dc > DESPAWN_RANGE) { site.traps.clear(); site.traps = null; }
+      if (site.traps) {
+        const p = player.pos, inside = Math.abs(p.x - c.x) <= c.reach && Math.abs(p.z - c.z) <= c.reach && p.y < site.base + (site.kind === 'citadel' ? 13 : 30);
+        site.traps.update(dt, player, hooks, inside);
+      }
       if (site.spawned && !this.list.some((m) => m.site === site) && !(site.drake && !site.drake.dead) && site.clearedAt === null) {
         site.clearedAt = now; site.spawned = false; site.drake = null;
       }

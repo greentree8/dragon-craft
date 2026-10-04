@@ -29,7 +29,7 @@ def(B.CRYSTAL_CYAN,   { emissive: true, top: 0x45e8ff, side: 0x33d6f2, bottom: 0
 def(B.GOLD,   { top: 0xffd23f, side: 0xf2c12e, bottom: 0xe0b020, glow: 0.35, emissive: true, jitter: 0.1 });
 def(B.PLANKS, { top: 0xc79a5b, side: 0xb98a4c, bottom: 0xa87a40, jitter: 0.05 });
 def(B.CACTUS, { top: 0x3d9c4a, side: 0x2f8a3d, bottom: 0x2f8a3d, jitter: 0.06 });
-def(B.LANTERN,{ emissive: true, top: 0xffd27a, side: 0xffc35a, bottom: 0xffc35a, glow: 2.0, jitter: 0.05 });
+def(B.LANTERN,{ emissive: true, top: 0xffd27a, side: 0xffc35a, bottom: 0xffc35a, glow: 1.6, jitter: 0.05 });
 def(B.STONE_BRICK, { top: 0x8e9199, side: 0x7d8087, bottom: 0x70737a, jitter: 0.05 });
 def(B.ICE, { top: 0xbfe8ff, side: 0xa9dcf6, bottom: 0x93cdee, jitter: 0.04 });
 def(B.CHEST, { emissive: true, top: 0xb97a32, side: 0xa86a28, bottom: 0x7a4a1c, glow: 0.35, jitter: 0.04 });
