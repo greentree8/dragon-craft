@@ -27,7 +27,7 @@ import { SLOT, DEFAULT_HOTBAR, FOODS, PALETTE, BLOCK_NAMES, canBreak } from './i
 import { VOLCANO, VILLAGE, CRYSTAL_ISLE, HEIGHT } from './worldgen.js';
 import { CASTLE, CASTLES } from './castle.js';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const params = new URLSearchParams(location.search);
 const LOW = params.get('q') === 'low';
 const RD = Number(params.get('rd')) || (LOW ? 5 : 7);
