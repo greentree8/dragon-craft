@@ -3,7 +3,7 @@
 export const B = {
   AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5, SNOW: 6, LOG: 7, LEAVES: 8,
   LAVA: 9, BASALT: 10, CRYSTAL_PURPLE: 11, CRYSTAL_CYAN: 12, GOLD: 13, PLANKS: 14,
-  CACTUS: 15, LANTERN: 16, COBBLE: 17, PINK_LEAVES: 18, ASH: 19, STONE_BRICK: 20, ICE: 21, CHEST: 22,
+  CACTUS: 15, LANTERN: 16, COBBLE: 17, PINK_LEAVES: 18, ASH: 19, STONE_BRICK: 20, ICE: 21, CHEST: 22, OBSIDIAN: 23,
 };
 
 // round: logs are drawn as rounded trunks (see world.js). smooth: natural terrain blocks get rendered as rounded surface-nets mesh (see smooth.js).
@@ -33,6 +33,7 @@ def(B.LANTERN,{ emissive: true, top: 0xffd27a, side: 0xffc35a, bottom: 0xffc35a,
 def(B.STONE_BRICK, { top: 0x8e9199, side: 0x7d8087, bottom: 0x70737a, jitter: 0.05 });
 def(B.ICE, { top: 0xbfe8ff, side: 0xa9dcf6, bottom: 0x93cdee, jitter: 0.04 });
 def(B.CHEST, { emissive: true, top: 0xb97a32, side: 0xa86a28, bottom: 0x7a4a1c, glow: 0.7, jitter: 0.04 });
+def(B.OBSIDIAN, { top: 0x45346a, side: 0x3a2b5a, bottom: 0x2d2146, jitter: 0.1 });
 def(B.COBBLE, { top: 0x9a9da3, side: 0x8b8e95, bottom: 0x7c7f86, jitter: 0.14 });
 
 export const isSolid = (id) => DEFS[id].solid;

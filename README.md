@@ -68,6 +68,14 @@ Winding tunnels (the way to the middle is hundreds of blocks long) are full of t
 **flame jets** (the wooden floor tile glows before it bursts) and **spike gates** that rise and fall (rough cobble tiles).
 At the far end a **Golden Apple** waits on a gold pedestal: eat it to be **invincible for 10 minutes**. It comes back 20 minutes later.
 
+## The Volcano Maze
+
+East of the volcano (about x 266, z -48; the map shows it) is a second, harder maze with black glass walls.
+**Fire turrets** shoot fireballs, **flame jets** and **spike gates** guard the tunnels, and some floors are **pools of lava**
+(walking through them burns; fly over them). At the far end, on a purple crystal pedestal, is the **Master Apple**.
+Eat it once and you keep it forever: press **K** to **Annihilate** every enemy, guard, Drake and animal within 70 blocks.
+It needs a 2 minute cooldown between uses.
+
 ## Survival, gently
 
 You have 10 hearts (40 health, so each hit costs a fraction of a heart).

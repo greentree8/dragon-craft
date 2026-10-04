@@ -1,17 +1,17 @@
-// The Labyrinth: a huge roofed maze full of traps. Reach the pedestal at the far end for the Golden Apple
-// (10 minutes of invincibility). The layout is a pure function (seeded), so every player gets the same maze.
+// A Labyrinth: a huge roofed maze full of traps. Reach the pedestal at the far end for its apple: the Giant Maze's
+// Golden Apple (10 minutes of invincibility) or the Volcano Maze's Master Apple (the Annihilate attack). The layout is a pure function (seeded), so every player gets the same maze.
 // Traps: arrow turrets in the walls, floor flame jets (the floor warms up first) and timed spike gates.
 import * as THREE from 'three';
-import { MAZE, mazeInfo, U, G, HALF } from './mazegen.js';
 
 // world position of the middle of unit (gx, gz), at the floor surface
-export function mazeCell(gx, gz, base) {
-  return new THREE.Vector3(MAZE.x + gx * U + 1 - HALF + 0.5, base + 1, MAZE.z + gz * U + 1 - HALF + 0.5);
+export function mazeCell(m, gx, gz, base) {
+  return new THREE.Vector3(m.x + gx * m.U + 1 - m.HALF + 0.5, base + 1, m.z + gz * m.U + 1 - m.HALF + 0.5);
 }
 
 export class Labyrinth {
   // host: the Enemies instance (for arrows). hooks: { hit(dmg, source), toast(text), golden() }
-  constructor(scene, world, host, bursts, room) {
+  constructor(scene, world, host, bursts, room, maze) {
+    this.m = maze;
     this.scene = scene; this.world = world; this.host = host; this.bursts = bursts; this.room = room;
     this.spawned = false; this.traps = []; this.apple = null; this.warned = false; this.time = 0;
     this._v = new THREE.Vector3();
@@ -21,16 +21,22 @@ export class Labyrinth {
     this.eyeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 0.5, 0.2) });
   }
 
-  get center() { return this._c ??= new THREE.Vector3(MAZE.x + 0.5, 0, MAZE.z + 0.5); }
-  appleKey() { return `dragoncraft:goldapple:${this.room}`; }
-  appleReady() { try { return (Number(localStorage.getItem(this.appleKey())) || 0) + 20 * 60 * 1000 < Date.now(); } catch { return true; } }
+  get center() { return this._c ??= new THREE.Vector3(this.m.x + 0.5, 0, this.m.z + 0.5); }
+  appleKey() { return this.m.apple === 'master' ? `dragoncraft:master:${this.room}` : `dragoncraft:goldapple:${this.room}`; }
+  // the Golden Apple comes back 20 minutes after you eat it; the Master Apple is yours for good once taken
+  appleReady() {
+    try {
+      const t = Number(localStorage.getItem(this.appleKey())) || 0;
+      return this.m.apple === 'master' ? !t : t + 20 * 60 * 1000 < Date.now();
+    } catch { return true; }
+  }
 
   spawn() {
-    const base = this.world.gen.mazeBase();
-    const info = mazeInfo();
+    const base = this.world.gen.mazeBase(this.m);
+    const info = this.m.info();
     this.base = base;
     for (const t of info.traps.values()) {
-      const c = mazeCell(t.gx, t.gz, base);
+      const c = mazeCell(this.m, t.gx, t.gz, base);
       const o = { t, c, group: new THREE.Group(), clock: t.phase, cd: 1 + Math.random() * 2, state: 'idle', up: 0 };
       if (t.kind === 'turret') {
         o.group.position.set(c.x + t.wall[0] * 1.15, base + 2.5, c.z + t.wall[1] * 1.15);
@@ -64,10 +70,11 @@ export class Labyrinth {
     }
     // the golden apple on its pedestal at the far end
     if (this.appleReady()) {
-      const g = mazeCell(info.goal[0], info.goal[1], base);
-      const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.4, 2.4, 0.4) });
+      const g = mazeCell(this.m, info.goal[0], info.goal[1], base);
+      const master = this.m.apple === 'master';
+      const mat = new THREE.MeshBasicMaterial({ color: master ? new THREE.Color(2.8, 0.5, 3.4) : new THREE.Color(3.4, 2.4, 0.4) });
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 14), mat);
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 2.2, 0.4) })); leaf.position.set(0.1, 0.45, 0);
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshBasicMaterial({ color: master ? new THREE.Color(3, 3, 3.6) : new THREE.Color(0.4, 2.2, 0.4) })); leaf.position.set(0.1, 0.45, 0);
       mesh.add(leaf);
       this.apple = { mesh, pos: new THREE.Vector3(g.x, g.y + 1.9, g.z) };
       mesh.position.copy(this.apple.pos);
@@ -86,13 +93,13 @@ export class Labyrinth {
   update(dt, player, hooks) {
     this.time += dt;
     const dc = Math.hypot(player.pos.x - this.center.x, player.pos.z - this.center.z);
-    if (!this.warned && dc < 140) { this.warned = true; hooks.toast('A giant maze! Reach the Golden Apple at the far end. Beware of traps!'); }
-    if (!this.spawned && dc < 150 && this.world.isLoaded(MAZE.x, MAZE.z)) this.spawn();
+    if (!this.warned && dc < 140) { this.warned = true; hooks.toast(this.m.warn); }
+    if (!this.spawned && dc < 150 && this.world.isLoaded(this.m.x, this.m.z)) this.spawn();
     if (this.spawned && dc > 240) this.despawn();
     if (!this.spawned) return;
 
     const p = player.pos, base = this.base;
-    const inside = dc < MAZE.reach && p.y < base + 7;
+    const inside = dc < this.m.reach && p.y < base + 7;
     for (const o of this.traps) {
       const dx = p.x - o.c.x, dz = p.z - o.c.z, dy = p.y - o.c.y;
       if (o.t.kind === 'turret') {
@@ -102,7 +109,7 @@ export class Labyrinth {
         if (d < 22 && inside && !player.dead) {
           o.barrel.lookAt(p.x, p.y, p.z);
           o.cd -= dt;
-          if (o.cd <= 0 && this.host.lineOfSight(gp, p)) { o.cd = 1.7 + Math.random() * 0.9; this.host.fire(gp.clone(), p, 22, 'arrow', 0.9, player.vel); }
+          if (o.cd <= 0 && this.host.lineOfSight(gp, p)) { o.cd = 1.7 + Math.random() * 0.9; this.host.fire(gp.clone(), p, this.m.theme.ammo === 'fireball' ? 19 : 22, this.m.theme.ammo, 0.9, player.vel); }
         }
       } else if (o.t.kind === 'flame') {
         o.clock += dt;
@@ -141,7 +148,7 @@ export class Labyrinth {
         this.bursts.burst(this.apple.pos.x, this.apple.pos.y, this.apple.pos.z, 0xffd23f, 40, 7, 0.22, 3, 4);
         this.scene.remove(this.apple.mesh); this.apple = null;
         try { localStorage.setItem(this.appleKey(), String(Date.now())); } catch { /* ignore */ }
-        hooks.golden();
+        hooks[this.m.apple]();
       }
     }
   }

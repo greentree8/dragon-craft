@@ -1,7 +1,7 @@
 // Full-screen world map (M): terrain drawn from the world generator, plus the landmarks, you and other players.
 import { SEA, VILLAGE, VOLCANO, LAKE, CRYSTAL_ISLE } from './worldgen.js';
 import { CASTLES } from './castle.js';
-import { MAZE } from './mazegen.js';
+import { MAZES } from './mazegen.js';
 
 const SPAN = 1000;          // blocks across, centred on the origin
 const RES = 4;              // blocks per terrain pixel
@@ -14,7 +14,7 @@ const PLACES = [
   { name: 'Volcano', icon: 'volcano', x: VOLCANO.x, z: VOLCANO.z },
   { name: 'Lake', icon: 'lake', x: LAKE.x, z: LAKE.z },
   { name: 'Crystal Isle', icon: 'crystal', x: CRYSTAL_ISLE.x, z: CRYSTAL_ISLE.z },
-  { name: 'Giant Maze', icon: 'maze', x: MAZE.x, z: MAZE.z, big: true },
+  ...MAZES.map((m) => ({ name: m.name, icon: m.id === 'volcano' ? 'volcanomaze' : 'maze', x: m.x, z: m.z, big: true })),
   ...CASTLES.map((c, i) => ({ name: `Castle ${i + 1}`, icon: 'castle', x: c.x, z: c.z, big: true })),
 ];
 
@@ -30,6 +30,11 @@ function drawIcon(g, kind, x, y, k) {
   } else if (kind === 'maze') {
     box('#9b3fe0', k, k);
     g.strokeStyle = '#e8c8ff'; g.lineWidth = 3; g.beginPath();
+    g.moveTo(x - k * 0.5, y + k * 0.8); g.lineTo(x - k * 0.5, y - k * 0.4); g.lineTo(x + k * 0.1, y - k * 0.4); g.lineTo(x + k * 0.1, y + k * 0.3); g.lineTo(x + k * 0.6, y + k * 0.3); g.lineTo(x + k * 0.6, y - k * 0.8);
+    g.stroke();
+  } else if (kind === 'volcanomaze') {
+    box('#2a1a3a', k, k);
+    g.strokeStyle = '#ff7a2a'; g.lineWidth = 3; g.beginPath();
     g.moveTo(x - k * 0.5, y + k * 0.8); g.lineTo(x - k * 0.5, y - k * 0.4); g.lineTo(x + k * 0.1, y - k * 0.4); g.lineTo(x + k * 0.1, y + k * 0.3); g.lineTo(x + k * 0.6, y + k * 0.3); g.lineTo(x + k * 0.6, y - k * 0.8);
     g.stroke();
   } else if (kind === 'village') {

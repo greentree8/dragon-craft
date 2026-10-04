@@ -138,3 +138,5 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 1px; b
 #worldmap .wm-stack { position: relative; width: min(640px, 92vw, 78vh); aspect-ratio: 1; border: 3px solid #e8e0c8; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
 #worldmap .wm-stack canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
 #worldmap .wm-status { font: 600 14px system-ui, sans-serif; opacity: .85; min-height: 18px; }
+
+#abilities .ab.locked { opacity: .4; filter: grayscale(1); }

@@ -2,21 +2,23 @@
 //   Z  chain lightning: instant bolt that arcs from the first thing you hit to nearby enemies and stuns them
 //   X  explosive fireball: a slow heavy shot that blows up on impact, hurting everything nearby and cratering the ground
 //   B  roar: a shockwave that knocks back and stuns everything around you
+//   K  annihilate (needs the Master Apple from the Volcano Maze): kills every enemy and animal within 70 blocks; 2 minute cooldown
 import * as THREE from 'three';
 
 export const ABILITIES = [
   { id: 'lightning', key: 'Z', icon: '⚡', name: 'Lightning', cooldown: 2.5, cost: 0.5 },
   { id: 'fireball', key: 'X', icon: '☄', name: 'Fireball', cooldown: 3, cost: 1.0 },
   { id: 'roar', key: 'B', icon: '📣', name: 'Roar', cooldown: 9, cost: 0.8 },
+  { id: 'doom', key: 'K', icon: '💀', name: 'Annihilate (Master Apple)', cooldown: 120, cost: 2 },
 ];
 
-const BOLT_RANGE = 55, FIREBALL_SPEED = 36, BLAST_RADIUS = 5.5, CRATER = 2.3, ROAR_RADIUS = 15;
+const DOOM_RADIUS = 70, BOLT_RANGE = 55, FIREBALL_SPEED = 36, BLAST_RADIUS = 5.5, CRATER = 2.3, ROAR_RADIUS = 15;
 
 export class Abilities {
   // deps: { scene, world, bursts, mobs, enemies, canBreak, B }
   constructor(deps) {
     Object.assign(this, deps);
-    this.cd = { lightning: 0, fireball: 0, roar: 0 };
+    this.cd = { lightning: 0, fireball: 0, roar: 0, doom: 0 };
     this.bolts = []; this.balls = []; this.rings = [];
     this._v = new THREE.Vector3(); this._d = new THREE.Vector3();
     this.boltMat = new THREE.LineBasicMaterial({ color: new THREE.Color(2.6, 3.2, 6), transparent: true, fog: false });
@@ -48,6 +50,7 @@ export class Abilities {
     const spec = ABILITIES.find((a) => a.id === id);
     if (id === 'lightning') this.lightning(origin, dir);
     else if (id === 'fireball') this.fireball(origin, dir, player);
+    else if (id === 'doom') this.doom(player.pos);
     else this.roar(player.pos);
     this.cd[id] = spec.cooldown;
     return true;
@@ -146,6 +149,29 @@ export class Abilities {
     }
   }
 
+  // ---- annihilate: nothing nearby survives ----
+  doom(pos) {
+    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 0.7, 3.6), transparent: true, opacity: 0.6, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending, fog: false });
+    const mesh = new THREE.Mesh(this.ringGeo, mat);
+    mesh.position.copy(pos);
+    this.scene.add(mesh);
+    this.rings.push({ mesh, life: 1.1, max: 1.1, pos: pos.clone(), radius: DOOM_RADIUS, a: 0.6 });
+    this.bursts.burst(pos.x, pos.y, pos.z, 0xe8c8ff, 40, 12, 0.3, 4, 2);
+    for (const t of this.targets()) {
+      if (t.pos.distanceTo(pos) - t.r > DOOM_RADIUS) continue;
+      if (t.type === 'enemy') t.ref.hp = 0;                       // the guard falls on the next update (and drops its loot)
+      else if (t.type === 'mob') this.mobs.hurt(t.ref, 9999, pos);
+      else t.ref.hp = 0;                                          // a Dread Drake dies on its next update, loot and all
+      this.bursts.burst(t.pos.x, t.pos.y + 0.5, t.pos.z, 0xc060ff, 20, 7, 0.25, 3, 4);
+      this.bursts.burst(t.pos.x, t.pos.y + 0.5, t.pos.z, 0xffffff, 8, 5, 0.18, 2, 2);
+    }
+    // arrows, fireballs and bolts in the air vanish too
+    for (const a of [...this.enemies.arrows]) {
+      this.scene.remove(a.mesh);
+      this.enemies.arrows.splice(this.enemies.arrows.indexOf(a), 1);
+    }
+  }
+
   // ---- roar ----
   roar(pos) {
     const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 1.6, 2.4), transparent: true, opacity: 0.5, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending, fog: false });
@@ -186,8 +212,8 @@ export class Abilities {
     for (const r of [...this.rings]) {
       r.life -= dt;
       const t = 1 - r.life / r.max;
-      r.mesh.scale.setScalar(1 + t * ROAR_RADIUS);
-      r.mesh.material.opacity = 0.5 * (1 - t);
+      r.mesh.scale.setScalar(1 + t * (r.radius || ROAR_RADIUS));
+      r.mesh.material.opacity = (r.a || 0.5) * (1 - t);
       if (r.life <= 0) { this.scene.remove(r.mesh); r.mesh.material.dispose(); this.rings.splice(this.rings.indexOf(r), 1); }
     }
   }

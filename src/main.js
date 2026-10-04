@@ -16,7 +16,7 @@ import { Disguise } from './disguise.js';
 import { Chests, CHEST_MEAT } from './chests.js';
 import { Labyrinth } from './maze.js';
 import { WorldMap } from './map.js';
-import { MAZE } from './mazegen.js';
+import { MAZES } from './mazegen.js';
 import { Vitals } from './stats.js';
 import { Save } from './save.js';
 import { UI } from './ui.js';
@@ -130,11 +130,14 @@ const radar = new Radar(document.getElementById('hud'));
 ui.buildHotbar(hot);
 ui.buildAbilities([...ABILITIES, { key: 'H', icon: '🛡', name: 'Guard disguise (5 min)' }]);
 const worldMap = new WorldMap(world.gen);
-const maze = new Labyrinth(scene, world, enemies, bursts, WORLD);
+const mazes = MAZES.map((m) => new Labyrinth(scene, world, enemies, bursts, WORLD, m));
+let masterOwned = false;
+try { masterOwned = !!Number(localStorage.getItem(`dragoncraft:master:${WORLD}`)); } catch { /* ignore */ }
 const mazeHooks = {
   hit: (dmg, source) => enemyHooks.hit(dmg, source),
   toast: (t) => ui.toast(t),
   golden: () => { vitals.invincible = 600; ui.toast('GOLDEN APPLE! You are invincible for 10 minutes!'); },
+  master: () => { masterOwned = true; ui.toast('MASTER APPLE! Press K to ANNIHILATE everything nearby (2 minute cooldown)'); },
 };
 const chests = new Chests(world, WORLD, {
   give: (n) => { hot.food.meat += n; refreshHotbar(); },
@@ -227,6 +230,7 @@ function toggleDisguise() {
 
 function useAbility(id) {
   if (vitals.dead || !player.ready) return;
+  if (id === 'doom' && !masterOwned) { ui.toast('Find the Master Apple in the Volcano Maze to unlock this attack'); return; }
   aimFromCrosshair();
   if (abilities.use(id, mouth, aim, player)) {
     disguise.stop('attacked');
@@ -245,6 +249,7 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'KeyZ') useAbility('lightning');
   else if (e.code === 'KeyX') useAbility('fireball');
   else if (e.code === 'KeyB') useAbility('roar');
+  else if (e.code === 'KeyK') useAbility('doom');
   else if (e.code === 'KeyH') toggleDisguise();
   else if (e.code === 'KeyJ') goToFriend();
   else if (e.code === 'KeyM') worldMap.toggle();
@@ -454,13 +459,13 @@ function frame() {
   if (player.breathing && disguise.active) disguise.stop('attacked');
   disguise.update(dt, player);
   chests.update(dt, player);
-  if (player.ready) maze.update(dt, { pos: player.pos, vel: player.vel, dead: vitals.dead }, mazeHooks);
+  if (player.ready) for (const mz of mazes) mz.update(dt, { pos: player.pos, vel: player.vel, dead: vitals.dead }, mazeHooks);
   { // golden glow while invincible
     const g = vitals.invincible > 0 ? 0.28 + 0.14 * Math.sin(performance.now() / 160) : 0;
     for (const m of [dragon.mats.body, dragon.mats.belly]) m.emissive.setRGB(g, g * 0.72, g * 0.1);
     ui.setInvincible(vitals.invincible > 0 ? `✨ Invincible ${Math.floor(vitals.invincible / 60)}:${String(Math.floor(vitals.invincible % 60)).padStart(2, '0')}` : null);
   }
-  ui.setCooldowns([...abilities.fractions(), disguise.fraction()]);
+  ui.setCooldowns([...abilities.fractions(), disguise.fraction()], ABILITIES.map((a) => a.id === 'doom' && !masterOwned));
   ui.setDisguise(disguise.active ? `🛡 Disguised as a guard ${disguise.timeText()} · H to take off` : null);
   if (player.ready) enemies.update(dt, { pos: player.pos, vel: player.vel, dead: vitals.dead, disguised: disguise.active }, enemyHooks);
   ui.setBoss(enemies.bossInfo());
@@ -489,7 +494,7 @@ function frame() {
   radar.update(dt, { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw },
     net ? [...net.remotes.values()].filter((r) => r.hasPos).map((r) => ({ name: r.name, x: r.pos.x, y: r.pos.y, z: r.pos.z, color: r.dragon.look.body })) : [],
     net ? (net.connected ? `Room "${WORLD}": no other dragons yet. Send your friend this link!` : 'Reconnecting…')
-      : 'Single player. Could not reach the multiplayer server.', [...CASTLES.map((c) => ({ name: 'Castle', x: c.x, z: c.z })), { name: 'Maze', x: MAZE.x, z: MAZE.z }]);
+      : 'Single player. Could not reach the multiplayer server.', [...CASTLES.map((c) => ({ name: 'Castle', x: c.x, z: c.z })), ...MAZES.map((m) => ({ name: m.name, x: m.x, z: m.z }))]);
   if (net && (onlineT -= dt) <= 0) {
     onlineT = 1;
     onlineEl.textContent = net.connected ? `👥 ${[dragon.look.name, ...net.names()].join(', ')}` : '⚠ reconnecting…';
@@ -498,4 +503,4 @@ function frame() {
 frame();
 
 // handy for tests and future features
-window.__game = { maze, disguise, chests, abilities, composer, ice, enemies, net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE, CASTLE, CASTLES } };
+window.__game = { mazes, disguise, chests, abilities, composer, ice, enemies, net, THREE, scene, camera, renderer, world, sky, dragon, player, fire, mobs, vitals, hot, ui, save, bursts, landmarks: { VOLCANO, VILLAGE, CRYSTAL_ISLE, CASTLE, CASTLES } };

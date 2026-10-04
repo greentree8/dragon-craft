@@ -238,14 +238,16 @@ export class UI {
   }
 
   // fractions: how much cooldown is left for each ability (0 = ready)
-  setCooldowns(fractions) {
+  setCooldowns(fractions, locked = []) {
     fractions.forEach((f, i) => {
       const a = this.abEls[i];
-      const q = Math.round(f * 50);
+      const lk = !!locked[i];
+      const q = Math.round(f * 50) + (lk ? 1000 : 0);
       if (a.last === q) return;
       a.last = q;
       a.cd.style.height = `${f * 100}%`;
-      a.el.classList.toggle('ready', f <= 0);
+      a.el.classList.toggle('ready', f <= 0 && !lk);
+      a.el.classList.toggle('locked', lk);
     });
   }
 

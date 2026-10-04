@@ -2,7 +2,7 @@
 import { Noise, hash2, smoothstep, clamp, mix } from './noise.js';
 import { B } from './blocks.js';
 import { CASTLES, castleBlock } from './castle.js';
-import { MAZE, mazeBlock } from './mazegen.js';
+import { MAZES } from './mazegen.js';
 
 export const CHUNK = 16;
 export const HEIGHT = 128;
@@ -206,34 +206,42 @@ export class WorldGen {
   }
 
   nearMaze(x, z, pad = 0) {
-    return Math.abs(x - MAZE.x) <= MAZE.reach + pad && Math.abs(z - MAZE.z) <= MAZE.reach + pad;
+    return MAZES.some((m) => Math.abs(x - m.x) <= m.reach + pad && Math.abs(z - m.z) <= m.reach + pad);
   }
 
-  // y of the labyrinth's floor layer: the average ground height under it
-  mazeBase() {
-    if (this._mazeBase === undefined) {
+  // y of a labyrinth's floor layer: the average ground height under it
+  mazeBase(m = MAZES[0]) {
+    this._mazeBase ??= new Map();
+    let v = this._mazeBase.get(m.id);
+    if (v === undefined) {
       let sum = 0, n = 0;
-      for (const dx of [-36, -18, 0, 18, 36]) for (const dz of [-36, -18, 0, 18, 36]) { sum += this.height(MAZE.x + dx, MAZE.z + dz); n++; }
-      this._mazeBase = Math.round(sum / n);
+      const e = m.HALF - 4, step = e / 2;
+      for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { sum += this.height(m.x + Math.round(i * step), m.z + Math.round(j * step)); n++; }
+      v = Math.round(sum / n);
+      this._mazeBase.set(m.id, v);
     }
-    return this._mazeBase;
+    return v;
   }
 
   stampMaze(data, cx, cz) {
+    for (const m of MAZES) this.stampOneMaze(data, cx, cz, m);
+  }
+
+  stampOneMaze(data, cx, cz, m) {
     const ox = cx * CHUNK, oz = cz * CHUNK;
-    if (ox > MAZE.x + MAZE.reach || ox + CHUNK <= MAZE.x - MAZE.reach) return;
-    if (oz > MAZE.z + MAZE.reach || oz + CHUNK <= MAZE.z - MAZE.reach) return;
-    const base = this.mazeBase();
+    if (ox > m.x + m.reach || ox + CHUNK <= m.x - m.reach) return;
+    if (oz > m.z + m.reach || oz + CHUNK <= m.z - m.reach) return;
+    const base = this.mazeBase(m);
     for (let lz = 0; lz < CHUNK; lz++) for (let lx = 0; lx < CHUNK; lx++) {
-      const dx = ox + lx - MAZE.x, dz = oz + lz - MAZE.z;
-      if (Math.max(Math.abs(dx), Math.abs(dz)) > 40) continue;
+      const dx = ox + lx - m.x, dz = oz + lz - m.z;
+      if (Math.max(Math.abs(dx), Math.abs(dz)) > m.HALF) continue;
       for (let y = base - 1; y > 2; y--) {
         const i = (y * CHUNK + lz) * CHUNK + lx;
         if (data[i] !== B.AIR && data[i] !== B.WATER) break;
         data[i] = B.STONE_BRICK;
       }
       for (let dy = 0; dy <= 8; dy++) {
-        const id = mazeBlock(dx, dy, dz);
+        const id = m.block(dx, dy, dz);
         if (id !== undefined) data[((base + dy) * CHUNK + lz) * CHUNK + lx] = id;
       }
     }
