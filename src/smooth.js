@@ -11,6 +11,7 @@ export const P = CHUNK + 2 * PAD;
 
 const ISO = 13.5; // blurred 3x3x3 count (0..27) that marks the surface
 const Y = HEIGHT + 4;
+const OCC = new Uint8Array(P * P * Y), SUMX = new Uint8Array(P * P * Y), SUMZ = new Uint8Array(P * P * Y); // reused between chunks
 const SM = DEFS.map((d) => !!d.smooth);
 const SOLID = DEFS.map((d) => (d.solid ? 1 : 0));
 const LEAFY = DEFS.map((d) => (d.leafy ? 1 : 0));
@@ -27,7 +28,7 @@ export function buildSmooth(pad, maxY, ox, oz) {
   const yMaxS = Math.min(HEIGHT, maxY + 1); // highest sample row that can hold surface data
 
   // occupancy of smooth blocks (below the world counts as solid, above as air)
-  const occ = new Uint8Array(P * P * Y);
+  const occ = OCC; occ.fill(0);
   let any = 0;
   const yHi = Math.min(HEIGHT - 1, maxY);
   for (let z = 0; z < P; z++) for (let y = 0; y <= yHi; y++) {
@@ -37,17 +38,24 @@ export function buildSmooth(pad, maxY, ox, oz) {
   if (!any) return null;
   for (let z = 0; z < P; z++) for (let y = 0; y < 2; y++) occ.fill(1, (z * Y + y) * P, (z * Y + y + 1) * P);
 
-  // blurred density at sample points x,z in [-1, CHUNK], y in [-1, yMaxS]
+  // blurred density at sample points x,z in [-1, CHUNK], y in [-1, yMaxS]: a 3x3x3 box sum, done as three 1-D passes
   const CW = CHUNK + 2, CY = yMaxS + 2;
   const C = new Uint8Array(CW * CW * CY);
   const cidx = (x, y, z) => ((z + 1) * CY + (y + 1)) * CW + (x + 1);
-  for (let z = -1; z <= CHUNK; z++) for (let y = -1; y <= yMaxS; y++) for (let x = -1; x <= CHUNK; x++) {
-    let s = 0;
-    for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) {
-      const o = ((z + dz + PAD) * Y + (y + dy + 2)) * P + (x + PAD);
-      s += occ[o - 1] + occ[o] + occ[o + 1];
-    }
-    C[cidx(x, y, z)] = s;
+  const yRows = yMaxS + 4; // occupancy rows y = -2 .. yMaxS + 1
+  const zStride = Y * P;
+  for (let z = 0; z < P; z++) for (let yr = 0; yr < yRows; yr++) {   // sum along x
+    const o = z * zStride + yr * P;
+    for (let x = 1; x < P - 1; x++) SUMX[o + x] = occ[o + x - 1] + occ[o + x] + occ[o + x + 1];
+  }
+  for (let z = 1; z < P - 1; z++) for (let yr = 0; yr < yRows; yr++) { // then along z
+    const o = z * zStride + yr * P;
+    for (let x = 1; x < P - 1; x++) SUMZ[o + x] = SUMX[o - zStride + x] + SUMX[o + x] + SUMX[o + zStride + x];
+  }
+  for (let z = -1; z <= CHUNK; z++) for (let y = -1; y <= yMaxS; y++) { // then along y, straight into C
+    const o = ((z + PAD) * Y + (y + 2)) * P + PAD;
+    const c = cidx(-1, y, z); // start of this row in C
+    for (let x = -1; x <= CHUNK; x++) C[c + x + 1] = SUMZ[o + x - P] + SUMZ[o + x] + SUMZ[o + x + P];
   }
 
   const pos = [], nor = [], col = [], idx = [];

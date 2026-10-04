@@ -112,7 +112,7 @@ wss.on('connection', (ws, req) => {
   const url = new URL(req.url, 'http://x');
   const roomName = (url.searchParams.get('room') || 'main').replace(/[^\w-]/g, '').slice(0, 24) || 'main';
   let player = null, room = null;
-  let tokens = 40, lastRefill = Date.now(); // edit rate limit
+  let tokens = 160, lastRefill = Date.now(); // edit rate limit
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
 
@@ -129,7 +129,7 @@ wss.on('connection', (ws, req) => {
       if (room.players.size >= MAX_PLAYERS) return ws.close(1013, 'room full');
       player = { id: room.nextId++, ws, look: cleanLook(m.look), state: null };
       room.send(ws, {
-        t: 'welcome', id: player.id, seed: room.seed, time: room.time(), edits: room.snapshot(),
+        t: 'welcome', proto: 2, id: player.id, seed: room.seed, time: room.time(), edits: room.snapshot(),
         players: [...room.players.values()].map((p) => ({ id: p.id, look: p.look, s: p.state })),
       });
       room.players.set(player.id, player);
@@ -152,18 +152,24 @@ wss.on('connection', (ws, req) => {
     } else if (m.t === 'look') {
       player.look = cleanLook(m.look);
       room.broadcast({ t: 'look', id: player.id, look: player.look }, ws);
-    } else if (m.t === 'e') {
+    } else if (m.t === 'e' || m.t === 'eb') {
       const now = Date.now();
-      tokens = Math.min(40, tokens + ((now - lastRefill) / 1000) * 30);
+      tokens = Math.min(160, tokens + ((now - lastRefill) / 1000) * 100);
       lastRefill = now;
-      if (tokens < 1) return;
-      tokens--;
-      const c = Array.isArray(m.c) ? m.c : [];
-      if (!isInt(c[0], -CHUNK_LIMIT, CHUNK_LIMIT) || !isInt(c[1], -CHUNK_LIMIT, CHUNK_LIMIT)) return;
-      if (!isInt(m.i, 0, CHUNK_VOLUME - 1) || !isInt(m.b, 0, MAX_BLOCK_ID)) return;
-      const y = Math.floor(m.i / 256);
-      if (y < 2 || y > 126) return;
-      if (room.applyEdit(c[0], c[1], m.i, m.b)) room.broadcast({ t: 'e', c, i: m.i, b: m.b }, ws);
+      // a single edit, or a batch of up to 100 (an explosion crater)
+      const list = m.t === 'eb' ? (Array.isArray(m.e) ? m.e.slice(0, 100) : []) : [[...(Array.isArray(m.c) ? m.c : []), m.i, m.b]];
+      const accepted = [];
+      for (const e of list) {
+        if (!Array.isArray(e) || e.length !== 4 || tokens < 1) continue;
+        const [cx, cz, idx, id] = e;
+        if (!isInt(cx, -CHUNK_LIMIT, CHUNK_LIMIT) || !isInt(cz, -CHUNK_LIMIT, CHUNK_LIMIT)) continue;
+        if (!isInt(idx, 0, CHUNK_VOLUME - 1) || !isInt(id, 0, MAX_BLOCK_ID)) continue;
+        const y = Math.floor(idx / 256);
+        if (y < 2 || y > 126) continue;
+        tokens--;
+        if (room.applyEdit(cx, cz, idx, id)) accepted.push([cx, cz, idx, id]);
+      }
+      if (accepted.length) room.broadcast({ t: 'eb', e: accepted }, ws);
     }
   });
 

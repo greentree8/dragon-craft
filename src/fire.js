@@ -41,9 +41,11 @@ export class FireBreath {
     this._c = new THREE.Color();
     this.active = 0;
     this.emitAcc = 0;
+    this.idle = true; // no live particles and the buffer is already cleared
   }
 
   emit(origin, dir, inheritVel, dt) {
+    this.idle = false;
     this.emitAcc += dt * this.opts.rate;
     const n = Math.floor(this.emitAcc);
     this.emitAcc -= n;
@@ -64,6 +66,11 @@ export class FireBreath {
   }
 
   update(dt, breathing) {
+    if (!this.idle) this.step(dt);
+    this.lightStep(dt, breathing);
+  }
+
+  step(dt) {
     const col = this._c;
     let alive = 0;
     for (let i = 0; i < MAX; i++) {
@@ -100,6 +107,10 @@ export class FireBreath {
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
     this.active = alive;
+    if (!alive) this.idle = true;
+  }
+
+  lightStep(dt, breathing) {
     const target = breathing && this._lightTarget ? 1 : 0;
     this.light.intensity += (target * (this.opts.lightPower + Math.random() * 20) - this.light.intensity) * Math.min(1, dt * 14);
     if (this._lightTarget) this.light.position.copy(this._lightTarget);

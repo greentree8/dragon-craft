@@ -16,6 +16,7 @@ export class Bursts {
     scene.add(this.mesh);
     this.p = Array.from({ length: MAX }, () => ({ life: 0, max: 1, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 0, g: 20, r: 1, gr: 1, b: 1 }));
     this.cursor = 0;
+    this.idle = true; // nothing alive and the instance buffer already cleared: skip the per-frame loop
     this._m = new THREE.Matrix4();
     this._pos = new THREE.Vector3();
     this._q = new THREE.Quaternion();
@@ -26,6 +27,7 @@ export class Bursts {
   // color: hex number or THREE.Color
   burst(x, y, z, color, count = 10, speed = 4, size = 0.14, up = 2, gravity = 20) {
     this._c.set(color);
+    this.idle = false;
     for (let i = 0; i < count; i++) {
       const p = this.p[this.cursor];
       this.cursor = (this.cursor + 1) % MAX;
@@ -40,10 +42,13 @@ export class Bursts {
   }
 
   update(dt) {
+    if (this.idle) return;
     const col = this._c;
+    let alive = 0;
     for (let i = 0; i < MAX; i++) {
       const p = this.p[i];
       if (p.life > 0) {
+        alive++;
         p.life -= dt;
         p.vy -= p.g * dt;
         p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
@@ -60,5 +65,6 @@ export class Bursts {
     }
     this.mesh.instanceMatrix.needsUpdate = true;
     this.mesh.instanceColor.needsUpdate = true;
+    if (!alive) this.idle = true; // this pass wrote the cleared state; stop until the next burst
   }
 }

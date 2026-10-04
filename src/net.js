@@ -18,7 +18,19 @@ class SharedEdits {
     m.set(idx, id);
     return changed;
   }
-  recordEdit(cx, cz, idx, id) { this.set(cx, cz, idx, id); this.net.send({ t: 'e', c: [cx, cz], i: idx, b: id }); }
+  // edits are sent in small batches (a crater is dozens of blocks), at most ~12 times a second
+  recordEdit(cx, cz, idx, id) {
+    this.set(cx, cz, idx, id);
+    (this.pending ??= []).push([cx, cz, idx, id]);
+    this.timer ??= setTimeout(() => this.flush(), 80);
+  }
+
+  flush() {
+    this.timer = null;
+    const list = this.pending; this.pending = [];
+    if (this.net.proto >= 2) for (let i = 0; i < list.length; i += 100) this.net.send({ t: 'eb', e: list.slice(i, i + 100) });
+    else for (const [cx, cz, i, b] of list) this.net.send({ t: 'e', c: [cx, cz], i, b }); // older server
+  }
 }
 
 export class Net {
@@ -41,6 +53,7 @@ export class Net {
     this.remotes = new Map(); // id -> { dragon, name, pos, target, state }
     this.ws = null;
     this.id = 0;
+    this.proto = 1;
     this.time = 0;
     this.closed = false;
     this.retry = 0;
@@ -78,7 +91,7 @@ export class Net {
   handle(m) {
     switch (m.t) {
       case 'welcome': {
-        this.id = m.id; this.seed = m.seed; this.time = m.time;
+        this.id = m.id; this.seed = m.seed; this.time = m.time; this.proto = m.proto || 1;
         const first = !this.gotWelcome;
         this.gotWelcome = true; this.retry = 0;
         const changes = [];
@@ -93,6 +106,7 @@ export class Net {
       case 'look': { const r = this.remotes.get(m.id); if (r) { r.name = m.look.name || r.name; r.dragon.setLook(m.look); } break; }
       case 's': { const r = this.remotes.get(m.id); if (r) this.setState(r, m); break; }
       case 'e': if (this.edits.set(m.c[0], m.c[1], m.i, m.b)) this.applyEdit(m.c[0], m.c[1], m.i, m.b); break;
+      case 'eb': for (const [cx, cz, i, b] of m.e) if (this.edits.set(cx, cz, i, b)) this.applyEdit(cx, cz, i, b); break;
     }
   }
 

@@ -116,6 +116,8 @@ export class World {
       vertexColors: true, transparent: true, opacity: 0.82, shininess: 90,
       specular: new THREE.Color(0x99ccff), depthWrite: false,
     });
+    this.prof = { n: 0, pad: 0, cubic: 0, smooth: 0 }; // meshing time per stage (ms), for tuning
+    this.urgent = new Set(); // edited chunks waiting to be re-meshed
     this.center = { cx: 0, cz: 0 };
     this.queue = [];
     this.shadowRange = 70;
@@ -156,10 +158,12 @@ export class World {
     if (lz < PAD) dzs.push(-1);
     if (lz >= CHUNK - PAD) dzs.push(1);
     for (const dx of dxs) for (const dz of dzs) if (dx || dz) touched.push(this.chunks.get(key(cx + dx, cz + dz)));
+    // don't re-mesh right now: a crater of 40 blocks would rebuild the same chunks 40 times in one frame.
+    // Mark them dirty and let update() rebuild each once, nearest first, within the frame budget.
     for (const t of touched) {
       if (!t || !t.data) continue;
-      if (t.meshed && this.neighboursReady(t.cx, t.cz)) this.meshChunk(t);
-      else t.dirty = true;
+      t.dirty = true;
+      if (t.meshed) this.urgent.add(t);
     }
     return true;
   }
@@ -175,6 +179,7 @@ export class World {
       this.rebuildQueue();
     }
     const start = performance.now();
+    this.remeshEdited(budgetMs);
     let guard = 0;
     while (performance.now() - start < budgetMs && guard++ < 6) {
       const job = this.nextJob();
@@ -189,6 +194,27 @@ export class World {
       const dx = (c.cx + 0.5) * CHUNK - px, dz = (c.cz + 0.5) * CHUNK - pz;
       const near = dx * dx + dz * dz < this.shadowRange * this.shadowRange;
       for (const m of c.meshes) m.castShadow = near && m !== c.water;
+    }
+  }
+
+  // rebuild edited chunks, closest to the player first; always at least one per frame so edits show up promptly
+  remeshEdited(budgetMs) {
+    if (!this.urgent.size) return;
+    const list = [...this.urgent].filter((c) => {
+      const alive = this.chunks.get(key(c.cx, c.cz)) === c;
+      if (!alive) this.urgent.delete(c);
+      return alive;
+    });
+    const { cx, cz } = this.center;
+    list.sort((a, b) => Math.hypot(a.cx - cx, a.cz - cz) - Math.hypot(b.cx - cx, b.cz - cz));
+    const start = performance.now();
+    let n = 0;
+    for (const c of list) {
+      if (n > 0 && performance.now() - start > budgetMs) break;
+      if (!this.neighboursReady(c.cx, c.cz)) continue; // stays queued until its neighbours are generated
+      this.meshChunk(c);
+      this.urgent.delete(c);
+      n++;
     }
   }
 
@@ -253,6 +279,7 @@ export class World {
   // ---- meshing ----
   meshChunk(c) {
     const { cx, cz } = c;
+    const t0 = performance.now();
     // padded copy so neighbour/AO/smoothing lookups are cheap
     const pad = new Uint8Array(P * HEIGHT * P);
     for (let pz = -PAD; pz < CHUNK + PAD; pz++) for (let px = -PAD; px < CHUNK + PAD; px++) {
@@ -261,6 +288,7 @@ export class World {
       const lx = px - ncx * CHUNK, lz = pz - ncz * CHUNK;
       for (let y = 0; y < HEIGHT; y++) pad[((pz + PAD) * HEIGHT + y) * P + (px + PAD)] = d[(y * CHUNK + lz) * CHUNK + lx];
     }
+    const tPad = performance.now();
     const at = (x, y, z) => (y < 0 || y >= HEIGHT ? 0 : pad[((z + PAD) * HEIGHT + y) * P + (x + PAD)]);
     const opaqueAt = (x, y, z) => { const b = at(x, y, z); return DEFS[b].opaque && !DEFS[b].emissive ? 1 : 0; };
     // smooth and round blocks don't fill their voxel, so they never hide a neighbour's face
@@ -355,6 +383,7 @@ export class World {
       }
     }
 
+    const tCubic = performance.now();
     this.disposeMeshes(c);
     const mk = (b, mat, order) => {
       const g = b.build();
@@ -382,6 +411,8 @@ export class World {
     }
     mk(glow, this.matGlow, 0);
     c.water = mk(water, this.matWater, 2);
+    const t1 = performance.now(), pr = this.prof;
+    pr.n++; pr.pad += tPad - t0; pr.cubic += tCubic - tPad; pr.smooth += t1 - tCubic;
     c.meshed = true;
     c.dirty = false;
   }
