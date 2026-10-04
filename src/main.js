@@ -15,6 +15,7 @@ import { Abilities, ABILITIES } from './abilities.js';
 import { Disguise } from './disguise.js';
 import { Chests, CHEST_MEAT } from './chests.js';
 import { Labyrinth } from './maze.js';
+import { WorldMap } from './map.js';
 import { MAZE } from './mazegen.js';
 import { Vitals } from './stats.js';
 import { Save } from './save.js';
@@ -128,6 +129,7 @@ const ui = new UI({
 const radar = new Radar(document.getElementById('hud'));
 ui.buildHotbar(hot);
 ui.buildAbilities([...ABILITIES, { key: 'H', icon: '🛡', name: 'Guard disguise (5 min)' }]);
+const worldMap = new WorldMap(world.gen);
 const maze = new Labyrinth(scene, world, enemies, bursts, WORLD);
 const mazeHooks = {
   hit: (dmg, source) => enemyHooks.hit(dmg, source),
@@ -150,7 +152,7 @@ document.addEventListener('pointerlockchange', () => {
     ui.hideMenu(); ui.markStarted();
     if (!iceHinted) { iceHinted = true; setTimeout(() => ui.toast('❄ Hold right-click or G for ICE breath (slot 1)'), 1800); }
   }
-  else { player.buttons.clear(); if (!ui.paletteOpen && !suppressMenu) ui.showMenu('play'); }
+  else { worldMap.setOpen(false); player.buttons.clear(); if (!ui.paletteOpen && !suppressMenu) ui.showMenu('play'); }
 });
 document.addEventListener('pointerlockerror', () => { suppressMenu = false; if (!ui.paletteOpen) ui.showMenu('play'); });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -245,6 +247,7 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'KeyB') useAbility('roar');
   else if (e.code === 'KeyH') toggleDisguise();
   else if (e.code === 'KeyJ') goToFriend();
+  else if (e.code === 'KeyM') worldMap.toggle();
   else if (e.code === 'KeyT' && !net) sky.time = (sky.time + 0.08) % 1;
   else if (e.code === 'KeyP' && !net) sky.paused = !sky.paused;
   else if (e.code === 'Minus') player.camDist = Math.min(16, player.camDist + 1);
@@ -481,6 +484,8 @@ function frame() {
       `chunks ${s.chunks}  tris ${(s.tris / 1000).toFixed(0)}k  mobs ${mobs.list.length}  time ${sky.clockString()}  ${player.flying ? 'flying' : 'walking'}`;
   } else debug.textContent = '';
   clockEl.textContent = sky.clockString();
+  worldMap.draw({ x: player.pos.x, z: player.pos.z, yaw: player.yaw },
+    net ? [...net.remotes.values()].filter((r) => r.hasPos).map((r) => ({ name: r.name, x: r.pos.x, z: r.pos.z, color: r.dragon.look.body })) : []);
   radar.update(dt, { x: player.pos.x, y: player.pos.y, z: player.pos.z, yaw: player.yaw },
     net ? [...net.remotes.values()].filter((r) => r.hasPos).map((r) => ({ name: r.name, x: r.pos.x, y: r.pos.y, z: r.pos.z, color: r.dragon.look.body })) : [],
     net ? (net.connected ? `Room "${WORLD}": no other dragons yet. Send your friend this link!` : 'Reconnecting…')

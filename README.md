@@ -31,6 +31,7 @@ see [deploy/README.md](deploy/README.md).
 | W A S D, mouse | fly / walk, steer |
 | Space / C / Shift | rise (and take off) / descend / boost |
 | 1 | breath: hold left click (or F) for fire, right click (or G) for ice |
+| M | world map: the maze, castles, village, volcano and your friends (north is up) |
 | Z / X / B | lightning (chains between enemies) / explosive fireball (craters the ground) / roar shockwave; each has a cooldown |
 | 2-7 | blocks (Stone Bricks stay cubic for building; dirt, stone, sand and grass are sculpted smooth): left-click breaks, right-click places, middle-click copies |
 | E | choose which blocks are in your hotbar |

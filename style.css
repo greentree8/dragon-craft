@@ -129,3 +129,12 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 1px; b
 /* golden apple invincibility */
 #invincible { position: absolute; top: 126px; left: 50%; transform: translateX(-50%); background: rgba(70,50,0,.75); border: 1px solid #ffd23f; padding: 5px 14px; border-radius: 16px; font: 700 14px system-ui, sans-serif; color: #ffe27a; text-shadow: 0 1px 3px #000; white-space: nowrap; }
 #invincible.hidden { display: none; }
+
+/* world map (M) */
+#worldmap { position: fixed; inset: 0; z-index: 30; display: grid; place-content: center; justify-items: center; gap: 8px; background: rgba(4,8,18,.78); }
+#worldmap.hidden { display: none; }
+#worldmap .wm-title { font: 800 22px system-ui, sans-serif; text-shadow: 0 2px 4px #000; }
+#worldmap .wm-title span { font-weight: 500; font-size: 14px; opacity: .75; }
+#worldmap .wm-stack { position: relative; width: min(640px, 92vw, 78vh); aspect-ratio: 1; border: 3px solid #e8e0c8; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
+#worldmap .wm-stack canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+#worldmap .wm-status { font: 600 14px system-ui, sans-serif; opacity: .85; min-height: 18px; }
