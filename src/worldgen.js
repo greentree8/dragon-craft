@@ -2,6 +2,7 @@
 import { Noise, hash2, smoothstep, clamp, mix } from './noise.js';
 import { B } from './blocks.js';
 import { CASTLES, castleBlock } from './castle.js';
+import { MAZE, mazeBlock } from './mazegen.js';
 
 export const CHUNK = 16;
 export const HEIGHT = 128;
@@ -169,6 +170,7 @@ export class WorldGen {
     this.stampTrees(data, cx, cz);
     this.stampVillage(data, cx, cz);
     this.stampCastle(data, cx, cz);
+    this.stampMaze(data, cx, cz);
     this.stampCrystals(data, cx, cz);
     return data;
   }
@@ -201,6 +203,40 @@ export class WorldGen {
       this._castleBase.set(c.id, v);
     }
     return v;
+  }
+
+  nearMaze(x, z, pad = 0) {
+    return Math.abs(x - MAZE.x) <= MAZE.reach + pad && Math.abs(z - MAZE.z) <= MAZE.reach + pad;
+  }
+
+  // y of the labyrinth's floor layer: the average ground height under it
+  mazeBase() {
+    if (this._mazeBase === undefined) {
+      let sum = 0, n = 0;
+      for (const dx of [-36, -18, 0, 18, 36]) for (const dz of [-36, -18, 0, 18, 36]) { sum += this.height(MAZE.x + dx, MAZE.z + dz); n++; }
+      this._mazeBase = Math.round(sum / n);
+    }
+    return this._mazeBase;
+  }
+
+  stampMaze(data, cx, cz) {
+    const ox = cx * CHUNK, oz = cz * CHUNK;
+    if (ox > MAZE.x + MAZE.reach || ox + CHUNK <= MAZE.x - MAZE.reach) return;
+    if (oz > MAZE.z + MAZE.reach || oz + CHUNK <= MAZE.z - MAZE.reach) return;
+    const base = this.mazeBase();
+    for (let lz = 0; lz < CHUNK; lz++) for (let lx = 0; lx < CHUNK; lx++) {
+      const dx = ox + lx - MAZE.x, dz = oz + lz - MAZE.z;
+      if (Math.max(Math.abs(dx), Math.abs(dz)) > 40) continue;
+      for (let y = base - 1; y > 2; y--) {
+        const i = (y * CHUNK + lz) * CHUNK + lx;
+        if (data[i] !== B.AIR && data[i] !== B.WATER) break;
+        data[i] = B.STONE_BRICK;
+      }
+      for (let dy = 0; dy <= 8; dy++) {
+        const id = mazeBlock(dx, dy, dz);
+        if (id !== undefined) data[((base + dy) * CHUNK + lz) * CHUNK + lx] = id;
+      }
+    }
   }
 
   stampCastle(data, cx, cz) {
@@ -254,7 +290,7 @@ export class WorldGen {
         }
 
         const h = this.height(px, pz);
-        if (h <= SEA + 1 || h > 62 || this.nearVillage(px, pz, 3) || this.nearCastle(px, pz, 3)) continue;
+        if (h <= SEA + 1 || h > 62 || this.nearVillage(px, pz, 3) || this.nearCastle(px, pz, 3) || this.nearMaze(px, pz, 3)) continue;
         if (this.volcanoDist(px, pz) < VOLCANO.radius) continue;
         // skip if a cave punched out the ground here (ground must be solid)
         const { temp, moist } = this.climate(px, pz);

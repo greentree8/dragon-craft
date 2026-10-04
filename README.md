@@ -60,6 +60,13 @@ Sneak into the keep and find the **hidden treasure chests** (4 per castle, two d
 
 Ice also turns water into ice blocks and cools lava into rock. The guards come back a few minutes after you clear the castle.
 
+## The Labyrinth
+
+A huge roofed maze stands at about x -210, z 170 (the radar marks it as "Maze"). The entrance is in the south wall.
+Winding tunnels (the way to the middle is hundreds of blocks long) are full of traps: **arrow turrets** in the walls,
+**flame jets** (the wooden floor tile glows before it bursts) and **spike gates** that rise and fall (rough cobble tiles).
+At the far end a **Golden Apple** waits on a gold pedestal: eat it to be **invincible for 10 minutes**. It comes back 20 minutes later.
+
 ## Survival, gently
 
 You have 10 hearts (40 health, so each hit costs a fraction of a heart).

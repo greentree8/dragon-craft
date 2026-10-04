@@ -125,3 +125,7 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; margin: 0 1px; b
 /* guard disguise timer */
 #disguise { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); background: rgba(8,14,28,.72); padding: 5px 14px; border-radius: 16px; font: 700 14px system-ui, sans-serif; text-shadow: 0 1px 3px #000; white-space: nowrap; }
 #disguise.hidden { display: none; }
+
+/* golden apple invincibility */
+#invincible { position: absolute; top: 126px; left: 50%; transform: translateX(-50%); background: rgba(70,50,0,.75); border: 1px solid #ffd23f; padding: 5px 14px; border-radius: 16px; font: 700 14px system-ui, sans-serif; color: #ffe27a; text-shadow: 0 1px 3px #000; white-space: nowrap; }
+#invincible.hidden { display: none; }

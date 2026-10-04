@@ -249,6 +249,13 @@ export class UI {
     });
   }
 
+  setInvincible(text) {
+    const el = $('invincible');
+    if (text === null) { el.classList.add('hidden'); return; }
+    el.classList.remove('hidden');
+    if (el.textContent !== text) el.textContent = text;
+  }
+
   setDisguise(text) {
     const el = $('disguise');
     if (text === null) { el.classList.add('hidden'); return; }

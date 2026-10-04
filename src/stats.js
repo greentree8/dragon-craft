@@ -11,6 +11,7 @@ export class Vitals {
     this.regenT = 0;
     this.starveT = 0;
     this.eatCooldown = 0;
+    this.invincible = 0; // seconds left of Golden Apple invincibility
     this.changed = true;
   }
 
@@ -29,6 +30,7 @@ export class Vitals {
     if (this.dead) return events;
     this.hurtCooldown = Math.max(0, this.hurtCooldown - dt);
     this.eatCooldown = Math.max(0, this.eatCooldown - dt);
+    this.invincible = Math.max(0, this.invincible - dt);
 
     // hunger drains slowly, faster with effort
     let drain = 0.03;
@@ -56,7 +58,7 @@ export class Vitals {
   }
 
   damage(n, source) {
-    if (this.dead || this.hurtCooldown > 0) return null;
+    if (this.dead || this.hurtCooldown > 0 || this.invincible > 0) return null;
     this.health = Math.max(0, this.health - n);
     this.hurtCooldown = 0.6;
     this.changed = true;
