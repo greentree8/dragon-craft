@@ -195,6 +195,20 @@ function aimFromCrosshair() {
   aim.copy(tmpV).sub(mouth).normalize();
 }
 
+let friendIdx = -1;
+// J: fly to the next other player (nearest first)
+function goToFriend() {
+  if (!net) { ui.toast('Single player: nobody to fly to'); return; }
+  const list = [...net.remotes.values()].filter((r) => r.hasPos).sort((a, b) => a.pos.distanceTo(player.pos) - b.pos.distanceTo(player.pos));
+  if (!list.length) { ui.toast('No other dragons online yet'); return; }
+  friendIdx = (friendIdx + 1) % list.length;
+  const r = list[friendIdx];
+  player.pos.set(r.pos.x + 6, r.pos.y + 2, r.pos.z);
+  player.vel.set(0, 0, 0);
+  player.flying = true;
+  ui.toast(`Flew to ${r.name}`);
+}
+
 function toggleDisguise() {
   if (disguise.active) { disguise.stop('You took off the disguise.'); return; }
   if (disguise.start()) ui.toast('Disguised as a castle guard! The guards will leave you alone. Do not attack.');
@@ -222,6 +236,7 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'KeyX') useAbility('fireball');
   else if (e.code === 'KeyB') useAbility('roar');
   else if (e.code === 'KeyH') toggleDisguise();
+  else if (e.code === 'KeyJ') goToFriend();
   else if (e.code === 'KeyT' && !net) sky.time = (sky.time + 0.08) % 1;
   else if (e.code === 'KeyP' && !net) sky.paused = !sky.paused;
   else if (e.code === 'Minus') player.camDist = Math.min(16, player.camDist + 1);

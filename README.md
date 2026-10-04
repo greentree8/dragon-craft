@@ -21,7 +21,7 @@ Handy URL options: `?q=low` (faster on slow computers), `?rd=5` (view distance i
 
 Everyone who opens the same address is in the same world, with the same builds, and sees each other's dragons and fire.
 Use `?world=name` to get a private room to share with a friend (e.g. `https://dragon.gordhamer.com/?world=oden-and-sam`).
-`?solo` plays alone. Animals are not shared yet. The server is `server/` (Node, `npm install` then `node server.js`);
+Press **J** to fly to the nearest other player, and watch the radar (bottom-left). `?solo` plays alone. Animals are not shared yet. The server is `server/` (Node, `npm install` then `node server.js`);
 see [deploy/README.md](deploy/README.md).
 
 ## Controls

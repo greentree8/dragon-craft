@@ -73,6 +73,7 @@ export class Radar {
         d.append(`🏰 ${nearest.pl.name}  ${ARROWS[oct]} ${Math.round(nearest.flat)} m`);
         this.list.appendChild(d);
       }
+      if (rows.length) { const h = document.createElement('div'); h.className = 'radar-empty'; h.textContent = 'J: fly to a friend'; this.list.appendChild(h); }
       for (const r of rows) {
         const d = document.createElement('div');
         const dot = document.createElement('i'); dot.style.background = css(r.o.color);
